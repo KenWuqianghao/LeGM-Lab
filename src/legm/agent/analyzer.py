@@ -1,0 +1,209 @@
+"""TakeAnalyzer — core agent that runs a multi-turn tool-use loop."""
+
+import json
+import logging
+from dataclasses import dataclass, field
+
+from legm.agent.prompts import LEGM_SYSTEM_PROMPT
+from legm.agent.tools import TOOL_DEFINITIONS, execute_tool
+from legm.llm.base import LLMProvider
+from legm.llm.types import Message, ToolCall
+from legm.stats.models import ChartData
+from legm.stats.plots import generate_flexible_chart
+from legm.stats.service import NBAStatsService
+
+logger = logging.getLogger(__name__)
+
+MAX_TOOL_ROUNDS = 2
+
+
+@dataclass(frozen=True, slots=True)
+class TakeAnalysis:
+    """Structured result from analyzing an NBA take."""
+
+    verdict: str  # "trash" | "valid" | "mid"
+    confidence: float
+    roast: str
+    reasoning: str
+    stats_used: list[str] = field(default_factory=list)
+    chart_data: ChartData | None = None
+    chart_png: bytes | None = None
+
+
+class TakeAnalyzer:
+    """Orchestrates the take → stats → roast pipeline.
+
+    Uses an LLM with tool-use to fetch real NBA stats and produce
+    a structured analysis with a tweet-ready roast.
+    """
+
+    def __init__(
+        self,
+        llm: LLMProvider,
+        stats_service: NBAStatsService,
+    ) -> None:
+        self._llm = llm
+        self._stats = stats_service
+
+    async def analyze(self, take_text: str) -> TakeAnalysis:
+        """Analyze an NBA take and return a structured roast."""
+        messages: list[Message] = [
+            Message(role="user", content=f"Analyze this NBA take: {take_text}"),
+        ]
+
+        for round_num in range(MAX_TOOL_ROUNDS):
+            logger.info("Agent round %d", round_num + 1)
+
+            response = await self._llm.generate(
+                messages=messages,
+                tools=TOOL_DEFINITIONS,
+                system=LEGM_SYSTEM_PROMPT,
+            )
+
+            if not response.tool_calls:
+                return _build_result(response.content)
+
+            # Build assistant content: any text + tool_use blocks
+            assistant_content: list[dict] = []
+            if response.content:
+                assistant_content.append({"type": "text", "text": response.content})
+            assistant_content.extend(_tool_calls_to_content(response.tool_calls))
+            messages.append(
+                Message(role="assistant", content=assistant_content),
+            )
+
+            # Execute all tools, collect results into one user message
+            tool_results: list[dict] = []
+            for tool_call in response.tool_calls:
+                logger.info(
+                    "Calling tool: %s(%s)",
+                    tool_call.name,
+                    tool_call.arguments,
+                )
+                result = await execute_tool(tool_call, self._stats)
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_call.id,
+                        "content": result,
+                    }
+                )
+            messages.append(
+                Message(role="user", content=tool_results),
+            )
+
+        # If we exhausted rounds, do a final call without tools
+        logger.warning(
+            "Exhausted %d tool rounds, forcing final response",
+            MAX_TOOL_ROUNDS,
+        )
+        response = await self._llm.generate(
+            messages=messages,
+            system=LEGM_SYSTEM_PROMPT,
+        )
+        return _build_result(response.content)
+
+
+def _tool_calls_to_content(tool_calls: list) -> list[dict]:
+    """Convert tool calls to assistant content blocks (Anthropic format)."""
+    return [
+        {
+            "type": "tool_use",
+            "id": tc.id,
+            "name": tc.name,
+            "input": tc.arguments,
+        }
+        for tc in tool_calls
+    ]
+
+
+def _extract_json(text: str) -> str | None:
+    """Try multiple strategies to extract JSON from LLM output."""
+    stripped = text.strip()
+
+    # Strategy 1: entire string is JSON
+    if stripped.startswith("{"):
+        return stripped
+
+    # Strategy 2: JSON inside markdown code fences
+    if "```" in stripped:
+        # Find content between first ``` and last ```
+        parts = stripped.split("```")
+        for part in parts[1::2]:  # odd-indexed parts are inside fences
+            candidate = part.strip()
+            # Remove optional language tag on first line
+            if candidate and not candidate.startswith("{"):
+                candidate = candidate.split("\n", 1)[-1].strip()
+            if candidate.startswith("{"):
+                return candidate
+
+    # Strategy 3: find first { to last } in the text
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start != -1 and end > start:
+        return stripped[start : end + 1]
+
+    return None
+
+
+def _parse_chart_data(raw: dict | None) -> ChartData | None:
+    """Validate chart_data from LLM output, returning None on failure."""
+    if not raw:
+        return None
+    try:
+        return ChartData.model_validate(raw)
+    except Exception:
+        logger.warning("Invalid chart_data from LLM, skipping: %s", str(raw)[:200])
+        return None
+
+
+def _parse_analysis(content: str) -> TakeAnalysis:
+    """Parse the LLM's JSON response into a TakeAnalysis."""
+    json_str = _extract_json(content)
+
+    try:
+        if json_str is None:
+            raise json.JSONDecodeError("No JSON found", content, 0)
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse LLM response as JSON: %s", content[:200])
+        return TakeAnalysis(
+            verdict="mid",
+            confidence=0.5,
+            roast=content[:280] if content else "Couldn't process this take dawg",
+            reasoning="Failed to parse structured response from LLM",
+            stats_used=[],
+        )
+
+    chart_data = _parse_chart_data(data.get("chart_data"))
+
+    return TakeAnalysis(
+        verdict=data.get("verdict", "mid"),
+        confidence=float(data.get("confidence", 0.5)),
+        roast=data.get("roast", "")[:280],
+        reasoning=data.get("reasoning", ""),
+        stats_used=data.get("stats_used", []),
+        chart_data=chart_data,
+    )
+
+
+def _build_result(content: str) -> TakeAnalysis:
+    """Parse LLM output and render chart if chart_data is present."""
+    analysis = _parse_analysis(content)
+    chart_png: bytes | None = None
+
+    if analysis.chart_data:
+        try:
+            chart_png = generate_flexible_chart(analysis.chart_data)
+        except Exception:
+            logger.exception("Failed to render chart from chart_data")
+
+    return TakeAnalysis(
+        verdict=analysis.verdict,
+        confidence=analysis.confidence,
+        roast=analysis.roast,
+        reasoning=analysis.reasoning,
+        stats_used=analysis.stats_used,
+        chart_data=analysis.chart_data,
+        chart_png=chart_png,
+    )

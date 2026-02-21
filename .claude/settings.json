@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest*)",
+      "Bash(uv run python*)",
+      "Bash(bun test*)",
+      "Bash(bun dev*)",
+      "Bash(bun run*)",
+      "Bash(bunx prettier*)",
+      "Bash(ruff *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git stash*)",
+      "Bash(npx prettier*)",
+      "Bash(python -m mypy*)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Edit(.env*)",
+      "Write(.env*)"
+    ]
+  }
+}
