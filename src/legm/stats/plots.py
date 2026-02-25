@@ -102,7 +102,8 @@ _LABEL_TO_KEY: dict[str, str] = {
 }
 
 _CANVAS_W = 1200
-_HEADSHOT_SIZE = 120
+_HEADSHOT_BADGE = 56
+_HEADSHOT_CARD = 90
 
 # -- Headshot cache --
 _headshot_cache: dict[int, str | None] = {}
@@ -165,7 +166,7 @@ def _fetch_headshot(player_id: int) -> str | None:
         return None
 
 
-def _headshot_image(player_id: int, size: int = _HEADSHOT_SIZE) -> Image | None:
+def _headshot_image(player_id: int, size: int = _HEADSHOT_BADGE) -> Image | None:
     """Return a PicTex Image builder for the player headshot, or None."""
     path = _fetch_headshot(player_id)
     if path is None:
@@ -345,47 +346,44 @@ def _build_comparison_table(
 ) -> bytes:
     """Build and render a comparison table with headshots and team gradient."""
     num_rows = len(rows)
-    canvas_h = 400 + (num_rows * 45)
+    canvas_h = 170 + (num_rows * 40)
 
     bg = _dual_team_gradient(team_a, team_b) if team_a and team_b else None
     canvas = _make_canvas(canvas_h, background=bg)
 
-    # -- Header row: [headshot_a] [title block] [headshot_b] --
-    title_block = (
+    # -- Header: [badge_a] Title [badge_b] on one compact line --
+    headshot_a = (
+        _headshot_image(player_id_a, _HEADSHOT_BADGE) if player_id_a else None
+    )
+    headshot_b = (
+        _headshot_image(player_id_b, _HEADSHOT_BADGE) if player_id_b else None
+    )
+
+    title_col = (
         Column(
-            _header_text(title, size=26),
+            _header_text(title, size=24),
             _subtitle_text(subtitle) if subtitle else Text("").size(height=0),
         )
         .flex_grow(1)
-        .gap(4)
+        .gap(2)
         .align_items("center")
         .justify_content("center")
     )
 
-    header_children: list[Column | Row | Text | Image] = []
-
-    headshot_a = _headshot_image(player_id_a, _HEADSHOT_SIZE) if player_id_a else None
-    headshot_b = _headshot_image(player_id_b, _HEADSHOT_SIZE) if player_id_b else None
-
+    header_parts: list[Column | Row | Text | Image] = []
     if headshot_a:
-        header_children.append(headshot_a)
-    else:
-        header_children.append(Row().size(width=_HEADSHOT_SIZE))
-
-    header_children.append(title_block)
-
+        header_parts.append(headshot_a)
+    header_parts.append(title_col)
     if headshot_b:
-        header_children.append(headshot_b)
-    else:
-        header_children.append(Row().size(width=_HEADSHOT_SIZE))
+        header_parts.append(headshot_b)
 
     header_row = (
-        Row(*header_children)
+        Row(*header_parts)
         .size(width="100%")
         .padding(0, 24)
         .align_items("center")
         .justify_content("center")
-        .gap(16)
+        .gap(12)
     )
 
     children: list[Column | Row | Text | Image] = [header_row]
@@ -528,70 +526,67 @@ def generate_stat_card(
         )
 
     num_stat_rows = len(stat_rows)
-    canvas_h = max(400, 200 + (num_stat_rows * 38))
+    canvas_h = 140 + (num_stat_rows * 30)
 
     bg = _team_gradient(stats.team)
     canvas = _make_canvas(canvas_h, background=bg)
 
-    # -- Left column: headshot --
-    headshot = _headshot_image(stats.player_id, size=280)
-    if headshot:
-        left_col = (
-            Column(headshot)
-            .size(width="30%", height="100%")
-            .align_items("center")
-            .justify_content("end")
+    children: list[Column | Row | Text | Image] = []
+
+    # -- Header: [headshot badge] NAME  |  hero PPG --
+    headshot = _headshot_image(stats.player_id, size=_HEADSHOT_CARD)
+
+    name_block = (
+        Column(
+            Text(stats.player_name.upper())
+            .font_size(22)
+            .font_weight(700)
+            .color(_TEXT_BRIGHT),
+            Text(
+                f"{stats.team}  |  {stats.season}  |  "
+                f"{stats.games_played} GP  |  {stats.mpg} MPG"
+            )
+            .font_size(12)
+            .color(_TEXT_DIM),
         )
-    else:
-        left_col = Column().size(width="30%")
-
-    # -- Right column: name, hero stat, meta, stat rows --
-    right_children: list[Column | Row | Text | Image] = []
-
-    # Player name
-    right_children.append(
-        Text(stats.player_name.upper())
-        .font_size(28)
-        .font_weight(700)
-        .color(_TEXT_BRIGHT)
-        .text_align(TextAlign.LEFT)
-        .size(width="100%")
+        .gap(2)
+        .justify_content("center")
     )
 
-    # Hero PPG
-    hero = (
+    hero_block = (
         Row(
             Text(f"{stats.ppg}")
-            .font_size(52)
+            .font_size(36)
             .font_weight(700)
             .color(_GOLD)
             .text_shadows(
-                Shadow(offset=(0, 0), blur_radius=20, color="#ffb30040"),
+                Shadow(offset=(0, 0), blur_radius=16, color="#ffb30040"),
             ),
-            Text("PPG").font_size(14).color(_TEXT_DIM).font_weight(700),
+            Text("PPG").font_size(12).color(_TEXT_DIM).font_weight(700),
         )
-        .gap(8)
+        .gap(6)
         .align_items("end")
+    )
+
+    header_parts: list[Column | Row | Text | Image] = []
+    if headshot:
+        header_parts.append(headshot)
+    header_parts.append(name_block)
+    # Push hero stat to the right
+    spacer = Row().flex_grow(1)
+    header_parts.append(spacer)
+    header_parts.append(hero_block)
+
+    header_row = (
+        Row(*header_parts)
         .size(width="100%")
+        .align_items("center")
+        .gap(12)
     )
-    right_children.append(hero)
+    children.append(header_row)
+    children.append(_divider())
 
-    # Meta line
-    meta = (
-        f"{stats.team}  |  {stats.season}  |  "
-        f"{stats.games_played} GP  |  {stats.mpg} MPG"
-    )
-    right_children.append(
-        Text(meta)
-        .font_size(13)
-        .color(_TEXT_DIM)
-        .text_align(TextAlign.LEFT)
-        .size(width="100%")
-    )
-
-    right_children.append(_divider())
-
-    # Stat rows
+    # -- Stat rows: two-column grid for density --
     for i, (label, value, color) in enumerate(stat_rows):
         row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
         row = (
@@ -601,28 +596,26 @@ def generate_stat_card(
                 .font_weight(700)
                 .color(_TEXT_DIM)
                 .flex_grow(1),
-                Text(value).font_size(16).font_weight(700).color(color),
+                Text(value).font_size(15).font_weight(700).color(color),
             )
             .size(width="100%")
-            .padding(5, 12)
+            .padding(4, 16)
             .background_color(row_bg)
             .border_radius(4)
         )
-        right_children.append(row)
+        children.append(row)
 
-    right_children.append(_watermark())
+    children.append(_watermark())
 
-    right_col = Column(*right_children).flex_grow(1).gap(3).justify_content("start")
-
-    # -- Main layout: left + right --
-    main_row = (
-        Row(left_col, right_col)
+    card = (
+        Column(*children)
         .size(width="100%", height="100%")
-        .gap(24)
-        .padding(24, 32)
+        .padding(20, 28)
+        .gap(3)
+        .justify_content("start")
     )
 
-    return _render_to_bytes(canvas, main_row)
+    return _render_to_bytes(canvas, card)
 
 
 # ---------------------------------------------------------------------------
@@ -674,7 +667,7 @@ def generate_flexible_chart(chart_data: ChartData) -> bytes:
 def _render_single_chart(chart_data: ChartData) -> bytes:
     """Render single-entity chart with dynamic height and tighter spacing."""
     num_rows = len(chart_data.rows)
-    canvas_h = 200 + (num_rows * 45)
+    canvas_h = 150 + (num_rows * 40)
 
     canvas = _make_canvas(canvas_h)
 

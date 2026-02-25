@@ -6,7 +6,7 @@ An AI-powered NBA take analyzer that fact-checks basketball opinions with real s
 >
 > "Bro averaged 25.7/7.3/8.3 last season on 54% TS at age 40. Your take is washed, not LeBron. Respectfully."
 
-![KD vs Curry comparison chart](charts/live_kd_vs_steph.png)
+![KD vs Curry comparison chart](charts/demo_kd_vs_steph.png)
 
 ## How It Works
 
@@ -32,7 +32,9 @@ The agent runs a multi-turn tool-use loop: the LLM decides which stats to look u
 
 ## Example Output
 
-![KD Warriors Finals comparison](charts/live_single_take.png)
+| Stat Card | Flexible Comparison |
+|-----------|-------------------|
+| ![LeBron stat card](charts/demo_lebron_card_2016.png) | ![2016 Finals Games 5-7](charts/demo_finals_g5_7_flexible.png) |
 
 ## Quick Start
 
