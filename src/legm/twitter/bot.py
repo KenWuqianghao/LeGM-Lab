@@ -253,7 +253,7 @@ class LeGMBot:
 
         if self._settings.bot_dry_run:
             logger.info(
-                "[DRY RUN] Would quote-tweet %s: %s",
+                "[DRY RUN] Would post about %s: %s",
                 best["id"],
                 analysis.roast,
             )
@@ -263,15 +263,9 @@ class LeGMBot:
             tweet_id = await self._twitter.post_tweet_with_media(
                 text=analysis.roast,
                 image_bytes=analysis.chart_png,
-                quote_tweet_id=best["id"],
             )
         else:
-            # Build the tweet URL for quoting
-            tweet_url = f"https://twitter.com/i/status/{best['id']}"
-            tweet_id = await self._twitter.quote_tweet(
-                text=analysis.roast,
-                quoted_tweet_url=tweet_url,
-            )
+            tweet_id = await self._twitter.post_tweet(text=analysis.roast)
 
         self._rate_limiter.record_post()
         self._daily_proactive_count += 1
@@ -279,14 +273,14 @@ class LeGMBot:
         await self._repository.record_tweet(
             take_id=take.id,
             tweet_id=tweet_id,
-            tweet_type="quote_tweet",
+            tweet_type="standalone",
             content=analysis.roast,
         )
 
         logger.info(
-            "Quote-tweeted %s with tweet %s (daily: %d/%d)",
-            best["id"],
+            "Posted standalone tweet %s (source: %s, daily: %d/%d)",
             tweet_id,
+            best["id"],
             self._daily_proactive_count,
             self._settings.bot_max_daily_proactive,
         )
