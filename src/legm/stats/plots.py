@@ -1,92 +1,55 @@
-"""Chart generation for LeGM take analysis — clean, minimal StatMuse-inspired."""
+"""Chart generation for LeGM take analysis — PicTex-powered stat cards."""
 
 import io
 
-import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
+from pictex import (
+    Canvas,
+    Column,
+    LinearGradient,
+    Row,
+    Shadow,
+    Text,
+    TextAlign,
+)
 
 from legm.stats.models import ChartData, PlayerAdvancedStats, PlayerSeasonStats
 
-matplotlib.use("Agg")
-
-# -- Style constants --
-_BG = "#0f1923"
+# -- Design tokens --
+_BG = LinearGradient(
+    colors=["#0f1923", "#152232", "#0f1923"],
+    start_point=(0.0, 0.0),
+    end_point=(1.0, 1.0),
+)
 _CARD_BG = "#162029"
-_ROW_ALT = "#1a2733"
+_ROW_EVEN = "#1a2733"
+_ROW_ODD = "#162029"
 _TEXT = "#c8d6e0"
 _TEXT_DIM = "#6b8298"
 _TEXT_BRIGHT = "#ffffff"
-_ACCENT_A = "#e05c44"  # warm coral-red
-_ACCENT_B = "#4fc3f7"  # clean blue
+_ACCENT_A = "#e05c44"
+_ACCENT_B = "#4fc3f7"
 _GREEN = "#4caf50"
 _RED = "#ef5350"
 _GOLD = "#ffb300"
 _DIVIDER = "#263640"
-_WATERMARK = "#ffffff08"
 
-# NBA league averages (rough benchmarks for color-coding)
-_LEAGUE_AVG = {
-    "ppg": 23.0,
-    "rpg": 6.0,
-    "apg": 4.5,
-    "fg_pct": 0.46,
-    "fg3_pct": 0.36,
-    "ft_pct": 0.78,
-    "ts_pct": 0.575,
-    "usg_pct": 0.20,
-    "net_rating": 0.0,
-    "pie": 0.10,
+# NBA league averages for color-coding
+_LEAGUE_AVG: dict[str, float] = {
+    "ppg": 23.0, "rpg": 6.0, "apg": 4.5,
+    "fg_pct": 0.46, "fg3_pct": 0.36, "ft_pct": 0.78,
+    "ts_pct": 0.575, "usg_pct": 0.20, "net_rating": 0.0, "pie": 0.10,
 }
 
+_LABEL_TO_KEY: dict[str, str] = {
+    "PPG": "ppg", "RPG": "rpg", "APG": "apg",
+    "FG%": "fg_pct", "FG PCT": "fg_pct",
+    "3P%": "fg3_pct", "3PT%": "fg3_pct", "FT%": "ft_pct",
+    "TS%": "ts_pct", "USG%": "usg_pct",
+    "NET RTG": "net_rating", "PIE": "pie",
+}
 
-def _text(
-    ax: plt.Axes,
-    x: float,
-    y: float,
-    s: str,
-    *,
-    color: str = _TEXT,
-    size: int = 12,
-    weight: str = "normal",
-    ha: str = "center",
-    va: str = "center",
-    family: str = "sans-serif",
-) -> None:
-    """Render text on axes (transAxes coordinates)."""
-    ax.text(
-        x, y, s,
-        transform=ax.transAxes,
-        ha=ha, va=va,
-        color=color, fontsize=size, fontweight=weight,
-        fontfamily=family,
-    )
-
-
-def _hline(ax: plt.Axes, y: float, x0: float = 0.04, x1: float = 0.96) -> None:
-    """Draw a subtle horizontal divider line."""
-    ax.plot(
-        [x0, x1], [y, y],
-        color=_DIVIDER, linewidth=0.7,
-        transform=ax.transAxes, clip_on=False,
-    )
-
-
-def _row_bg(ax: plt.Axes, y: float, h: float, color: str) -> None:
-    """Draw a filled row background band."""
-    rect = FancyBboxPatch(
-        (0.03, y - h / 2), 0.94, h,
-        boxstyle="square,pad=0",
-        transform=ax.transAxes,
-        facecolor=color, edgecolor="none",
-        zorder=0, clip_on=False,
-    )
-    ax.add_patch(rect)
-
-
-def _watermark(ax: plt.Axes) -> None:
-    """Subtle LeGM branding in bottom-right."""
-    _text(ax, 0.96, 0.025, "LeGM", color=_WATERMARK, size=14, weight="bold", ha="right")
+_CANVAS_W = 1200
+_CANVAS_H = 675
 
 
 def _color_for(stat_key: str, value: float) -> str:
@@ -101,13 +64,100 @@ def _color_for(stat_key: str, value: float) -> str:
     return _TEXT_BRIGHT
 
 
-def _fmt(val: float, is_pct: bool = False, is_plus: bool = False) -> str:
-    """Format a stat value for display."""
+def _fmt(val: float, *, is_pct: bool = False, is_plus: bool = False) -> str:
     if is_pct:
         return f"{val:.1%}"
     if is_plus:
         return f"{val:+.1f}"
     return f"{val:.1f}"
+
+
+def _fmt_from_hint(val: float, fmt: str) -> str:
+    if fmt == "percent":
+        return f"{val:.1%}"
+    if fmt == "plus":
+        return f"{val:+.1f}"
+    return f"{val:.1f}"
+
+
+def _render_to_bytes(canvas: Canvas, *builders: Column | Row) -> bytes:
+    """Render a PicTex canvas to PNG bytes."""
+    image = canvas.render(*builders, scale_factor=2)
+    pil = image.to_pillow()
+    buf = io.BytesIO()
+    pil.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
+
+
+def _make_canvas() -> Canvas:
+    """Create a standard LeGM canvas."""
+    return (
+        Canvas()
+        .font_family("Arial")
+        .color(_TEXT)
+        .background_color(_BG)
+        .size(width=_CANVAS_W, height=_CANVAS_H)
+    )
+
+
+def _header_text(text: str, *, size: int = 28, color: str = _TEXT_BRIGHT) -> Text:
+    return (
+        Text(text)
+        .font_size(size)
+        .font_weight(700)
+        .color(color)
+        .text_align(TextAlign.CENTER)
+        .size(width="100%")
+    )
+
+
+def _subtitle_text(text: str) -> Text:
+    return (
+        Text(text)
+        .font_size(14)
+        .color(_TEXT_DIM)
+        .text_align(TextAlign.CENTER)
+        .size(width="100%")
+    )
+
+
+def _divider() -> Row:
+    return Row().size(width="100%", height=1).background_color(_DIVIDER)
+
+
+def _watermark() -> Text:
+    return (
+        Text("LeGM")
+        .font_size(13)
+        .font_weight(700)
+        .color("#ffffff15")
+        .text_align(TextAlign.RIGHT)
+        .size(width="100%")
+    )
+
+
+def _stat_cell(
+    text: str,
+    *,
+    width: int | str = 0,
+    color: str = _TEXT,
+    size: int = 15,
+    weight: int = 400,
+    align: TextAlign = TextAlign.CENTER,
+) -> Text:
+    cell = (
+        Text(text)
+        .font_size(size)
+        .font_weight(weight)
+        .color(color)
+        .text_align(align)
+    )
+    if width:
+        cell.size(width=width)
+    else:
+        cell.flex_grow(1)
+    return cell
 
 
 # ---------------------------------------------------------------------------
@@ -121,11 +171,7 @@ def generate_comparison_chart(
     adv_a: PlayerAdvancedStats | None = None,
     adv_b: PlayerAdvancedStats | None = None,
 ) -> bytes:
-    """Create a clean table-style comparison chart.
-
-    Returns PNG image bytes at 200 DPI in 16:9 aspect ratio.
-    """
-    # Build stat rows: (label, val_a, val_b, is_pct, higher_is_better)
+    """Create a table-style comparison chart. Returns PNG bytes."""
     rows: list[tuple[str, float, float, bool, bool]] = [
         ("PPG", stats_a.ppg, stats_b.ppg, False, True),
         ("RPG", stats_a.rpg, stats_b.rpg, False, True),
@@ -139,48 +185,67 @@ def generate_comparison_chart(
             ("Net Rtg", adv_a.net_rating, adv_b.net_rating, False, True),
         ])
 
-    n_rows = len(rows)
-
-    fig, ax = plt.subplots(figsize=(16, 9))
-    fig.patch.set_facecolor(_BG)
-    ax.set_facecolor(_BG)
-    ax.axis("off")
-
-    # -- Title block --
-    _text(ax, 0.5, 0.94, f"{stats_a.player_name}  vs  {stats_b.player_name}",
-          color=_TEXT_BRIGHT, size=26, weight="bold")
+    name_a = stats_a.player_name.split()[-1].upper()
+    name_b = stats_b.player_name.split()[-1].upper()
 
     season_text = stats_a.season
     if stats_a.season != stats_b.season:
         season_text = f"{stats_a.season} / {stats_b.season}"
-    _text(ax, 0.5, 0.895, f"{stats_a.team}  |  {season_text}",
-          color=_TEXT_DIM, size=13)
 
-    # -- Table header --
-    header_y = 0.83
-    _hline(ax, header_y - 0.02)
-    _text(ax, 0.20, header_y, "STAT", color=_TEXT_DIM, size=11, weight="bold", ha="center")
-    _text(ax, 0.40, header_y, stats_a.player_name.split()[-1].upper(),
-          color=_ACCENT_A, size=12, weight="bold", ha="center")
-    _text(ax, 0.60, header_y, stats_b.player_name.split()[-1].upper(),
-          color=_ACCENT_B, size=12, weight="bold", ha="center")
-    _text(ax, 0.80, header_y, "EDGE", color=_TEXT_DIM, size=11, weight="bold", ha="center")
-    _hline(ax, header_y - 0.035)
+    return _build_comparison_table(
+        title=f"{stats_a.player_name}  vs  {stats_b.player_name}",
+        subtitle=f"{stats_a.team}  |  {season_text}",
+        name_a=name_a,
+        name_b=name_b,
+        full_name_a=stats_a.player_name.split()[-1],
+        full_name_b=stats_b.player_name.split()[-1],
+        rows=[
+            (label, va, vb, is_pct, hib)
+            for label, va, vb, is_pct, hib in rows
+        ],
+    )
 
-    # -- Stat rows --
-    y_start = header_y - 0.08
-    row_h = 0.065 if n_rows <= 7 else 0.055
+
+def _build_comparison_table(
+    *,
+    title: str,
+    subtitle: str | None,
+    name_a: str,
+    name_b: str,
+    full_name_a: str,
+    full_name_b: str,
+    rows: list[tuple[str, float, float, bool, bool]],
+) -> bytes:
+    """Build and render a comparison table."""
+    canvas = _make_canvas()
+
+    # Header
+    children: list[Column | Row | Text] = [
+        _header_text(title),
+    ]
+    if subtitle:
+        children.append(_subtitle_text(subtitle))
+
+    # Column headers
+    header_row = (
+        Row(
+            _stat_cell("STAT", color=_TEXT_DIM, size=12, weight=700),
+            _stat_cell(name_a, color=_ACCENT_A, size=13, weight=700),
+            _stat_cell(name_b, color=_ACCENT_B, size=13, weight=700),
+            _stat_cell("EDGE", color=_TEXT_DIM, size=12, weight=700, width=100),
+        )
+        .size(width="100%")
+        .padding(8, 24)
+    )
+    children.append(_divider())
+    children.append(header_row)
+    children.append(_divider())
+
+    # Stat rows
     wins_a = 0
     wins_b = 0
 
     for i, (label, va, vb, is_pct, higher_better) in enumerate(rows):
-        y = y_start - i * (row_h + 0.015)
-
-        # Alternating row background
-        if i % 2 == 0:
-            _row_bg(ax, y, row_h, _ROW_ALT)
-
-        # Determine winner
         a_wins = (va > vb) if higher_better else (va < vb)
         b_wins = (vb > va) if higher_better else (vb < va)
         if a_wins:
@@ -190,39 +255,62 @@ def generate_comparison_chart(
 
         color_a = _TEXT_BRIGHT if a_wins else _TEXT
         color_b = _TEXT_BRIGHT if b_wins else _TEXT
-        weight_a = "bold" if a_wins else "normal"
-        weight_b = "bold" if b_wins else "normal"
+        weight_a = 700 if a_wins else 400
+        weight_b = 700 if b_wins else 400
 
-        # Stat label
-        _text(ax, 0.20, y, label, color=_TEXT_DIM, size=13, weight="bold", ha="center")
-
-        # Values
         fmt_a = _fmt(va, is_pct=is_pct, is_plus=(label == "Net Rtg"))
         fmt_b = _fmt(vb, is_pct=is_pct, is_plus=(label == "Net Rtg"))
-        _text(ax, 0.40, y, fmt_a, color=color_a, size=16, weight=weight_a, ha="center")
-        _text(ax, 0.60, y, fmt_b, color=color_b, size=16, weight=weight_b, ha="center")
 
-        # Winner arrow
         if a_wins:
-            _text(ax, 0.80, y, "\u25c0", color=_ACCENT_A, size=14, ha="center")
+            edge_text, edge_color = "<", _ACCENT_A
         elif b_wins:
-            _text(ax, 0.80, y, "\u25b6", color=_ACCENT_B, size=14, ha="center")
+            edge_text, edge_color = ">", _ACCENT_B
         else:
-            _text(ax, 0.80, y, "\u2014", color=_TEXT_DIM, size=14, ha="center")
+            edge_text, edge_color = "-", _TEXT_DIM
 
-    # -- Bottom divider --
-    bottom_y = y_start - n_rows * (row_h + 0.015) + 0.01
-    _hline(ax, bottom_y)
+        row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
+        stat_row = (
+            Row(
+                _stat_cell(label, color=_TEXT_DIM, size=14, weight=700),
+                _stat_cell(fmt_a, color=color_a, size=17, weight=weight_a),
+                _stat_cell(fmt_b, color=color_b, size=17, weight=weight_b),
+                _stat_cell(edge_text, color=edge_color, size=15, width=100),
+            )
+            .size(width="100%")
+            .padding(10, 24)
+            .background_color(row_bg)
+            .border_radius(4)
+        )
+        children.append(stat_row)
 
-    # -- Win tally --
-    tally_y = bottom_y - 0.05
-    _text(ax, 0.35, tally_y, f"\u25a0  {stats_a.player_name.split()[-1]} leads {wins_a}",
-          color=_ACCENT_A, size=13, weight="bold", ha="center")
-    _text(ax, 0.65, tally_y, f"\u25a0  {stats_b.player_name.split()[-1]} leads {wins_b}",
-          color=_ACCENT_B, size=13, weight="bold", ha="center")
+    # Bottom divider + tally
+    children.append(_divider())
+    tally = (
+        Row(
+            _stat_cell(
+                f"{full_name_a} leads {wins_a}",
+                color=_ACCENT_A, size=14, weight=700,
+            ),
+            _stat_cell(
+                f"{full_name_b} leads {wins_b}",
+                color=_ACCENT_B, size=14, weight=700,
+            ),
+        )
+        .size(width="100%")
+        .padding(8, 24)
+    )
+    children.append(tally)
+    children.append(_watermark())
 
-    _watermark(ax)
-    return _fig_to_bytes(fig)
+    card = (
+        Column(*children)
+        .size(width="100%", height="100%")
+        .padding(32, 40)
+        .gap(4)
+        .justify_content("start")
+    )
+
+    return _render_to_bytes(canvas, card)
 
 
 # ---------------------------------------------------------------------------
@@ -234,11 +322,10 @@ def generate_stat_card(
     stats: PlayerSeasonStats,
     advanced: PlayerAdvancedStats | None = None,
 ) -> bytes:
-    """Create a clean two-column stat card with color-coded values.
+    """Create a two-column stat card with color-coded values. Returns PNG bytes."""
+    canvas = _make_canvas()
 
-    Returns PNG image bytes at 200 DPI in 16:9 aspect ratio.
-    """
-    left_rows: list[tuple[str, str, str]] = [
+    left_rows = [
         ("PPG", f"{stats.ppg}", _color_for("ppg", stats.ppg)),
         ("RPG", f"{stats.rpg}", _color_for("rpg", stats.rpg)),
         ("APG", f"{stats.apg}", _color_for("apg", stats.apg)),
@@ -258,261 +345,197 @@ def generate_stat_card(
             ("DRtg", f"{advanced.def_rating:.1f}", _TEXT_BRIGHT),
         ]
 
-    fig, ax = plt.subplots(figsize=(16, 9))
-    fig.patch.set_facecolor(_BG)
-    ax.set_facecolor(_BG)
-    ax.axis("off")
+    # Player name
+    children: list[Column | Row | Text] = [
+        _header_text(stats.player_name.upper(), size=30),
+    ]
 
-    # -- Player name --
-    _text(ax, 0.5, 0.94, stats.player_name.upper(),
-          color=_TEXT_BRIGHT, size=28, weight="bold")
+    # Hero PPG
+    hero = (
+        Column(
+            Text(f"{stats.ppg}")
+                .font_size(56)
+                .font_weight(700)
+                .color(_GOLD)
+                .text_align(TextAlign.CENTER)
+                .size(width="100%")
+                .text_shadows(
+                    Shadow(offset=(0, 0), blur_radius=20, color="#ffb30040"),
+                ),
+            Text("PPG")
+                .font_size(13)
+                .color(_TEXT_DIM)
+                .text_align(TextAlign.CENTER)
+                .size(width="100%"),
+        )
+        .size(width="100%")
+        .gap(0)
+        .align_items("center")
+    )
+    children.append(hero)
 
-    # -- Hero PPG --
-    _text(ax, 0.5, 0.84, f"{stats.ppg}",
-          color=_GOLD, size=60, weight="bold")
-    _text(ax, 0.5, 0.77, "PPG",
-          color=_TEXT_DIM, size=13)
+    # Meta line
+    meta = f"{stats.team}  |  {stats.season}  |  {stats.games_played} GP  |  {stats.mpg} MPG"
+    children.append(_subtitle_text(meta))
 
-    # -- Meta line --
-    _text(ax, 0.5, 0.72,
-          f"{stats.team}  |  {stats.season}  |  {stats.games_played} GP  |  {stats.mpg} MPG",
-          color=_TEXT_DIM, size=12)
+    # Stat columns
+    def _stat_column(
+        header: str, header_color: str, rows: list[tuple[str, str, str]]
+    ) -> Column:
+        col_children: list[Row | Text] = [
+            Text(header)
+                .font_size(12)
+                .font_weight(700)
+                .color(header_color)
+                .text_align(TextAlign.CENTER)
+                .size(width="100%"),
+        ]
+        for i, (label, value, color) in enumerate(rows):
+            row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
+            row = (
+                Row(
+                    Text(label)
+                        .font_size(13)
+                        .font_weight(700)
+                        .color(_TEXT_DIM)
+                        .flex_grow(1),
+                    Text(value)
+                        .font_size(16)
+                        .font_weight(700)
+                        .color(color),
+                )
+                .size(width="100%")
+                .padding(6, 16)
+                .background_color(row_bg)
+                .border_radius(4)
+            )
+            col_children.append(row)
+        return Column(*col_children).flex_grow(1).gap(3)
 
-    # -- Section headers --
-    section_y = 0.65
-    _text(ax, 0.25, section_y, "OFFENSE", color=_ACCENT_A, size=12, weight="bold")
-    _hline(ax, section_y - 0.02, 0.06, 0.44)
-
+    columns_row_children = [
+        _stat_column("OFFENSE", _ACCENT_A, left_rows),
+    ]
     if right_rows:
-        _text(ax, 0.75, section_y, "IMPACT", color=_ACCENT_B, size=12, weight="bold")
-        _hline(ax, section_y - 0.02, 0.56, 0.94)
+        columns_row_children.append(
+            _stat_column("IMPACT", _ACCENT_B, right_rows),
+        )
 
-    # -- Stat rows --
-    y_start = section_y - 0.065
-    row_h = 0.07
+    columns_row = Row(*columns_row_children).size(width="100%").gap(24)
+    children.append(_divider())
+    children.append(columns_row)
+    children.append(_watermark())
 
-    for i, (label, value, color) in enumerate(left_rows):
-        y = y_start - i * row_h
-        if i % 2 == 0:
-            _row_bg(ax, y, row_h * 0.85, _ROW_ALT)
-        _text(ax, 0.08, y, label, color=_TEXT_DIM, size=13, weight="bold", ha="left")
-        _text(ax, 0.42, y, value, color=color, size=16, weight="bold", ha="right")
+    card = (
+        Column(*children)
+        .size(width="100%", height="100%")
+        .padding(28, 40)
+        .gap(6)
+        .justify_content("start")
+    )
 
-    for i, (label, value, color) in enumerate(right_rows):
-        y = y_start - i * row_h
-        if i % 2 == 0:
-            _row_bg(ax, y, row_h * 0.85, _ROW_ALT)
-        _text(ax, 0.58, y, label, color=_TEXT_DIM, size=13, weight="bold", ha="left")
-        _text(ax, 0.92, y, value, color=color, size=16, weight="bold", ha="right")
-
-    _watermark(ax)
-    return _fig_to_bytes(fig)
+    return _render_to_bytes(canvas, card)
 
 
 # ---------------------------------------------------------------------------
 # Flexible chart — agent-driven data
 # ---------------------------------------------------------------------------
 
-# Map display labels to _LEAGUE_AVG keys for color coding
-_LABEL_TO_KEY: dict[str, str] = {
-    "PPG": "ppg",
-    "RPG": "rpg",
-    "APG": "apg",
-    "FG%": "fg_pct",
-    "FG PCT": "fg_pct",
-    "3P%": "fg3_pct",
-    "3PT%": "fg3_pct",
-    "FT%": "ft_pct",
-    "TS%": "ts_pct",
-    "USG%": "usg_pct",
-    "NET RTG": "net_rating",
-    "PIE": "pie",
-}
-
-
-def _normalize_label(label: str) -> str | None:
-    """Map a display label like 'FG%' to the _LEAGUE_AVG key like 'fg_pct'."""
-    return _LABEL_TO_KEY.get(label.upper().strip())
-
-
-def _fmt_from_hint(val: float, fmt: str) -> str:
-    """Format a value using the format hint from ChartRow."""
-    if fmt == "percent":
-        return f"{val:.1%}"
-    if fmt == "plus":
-        return f"{val:+.1f}"
-    return f"{val:.1f}"
-
 
 def generate_flexible_chart(chart_data: ChartData) -> bytes:
-    """Create a chart from agent-provided ChartData.
+    """Create a chart from agent-provided ChartData. Returns PNG bytes.
 
-    Comparison mode when label_b is set (two columns + EDGE arrows).
-    Single-entity mode when label_b is None (one value column, color-coded).
-
-    Returns PNG image bytes at 200 DPI in 16:9 aspect ratio.
+    Comparison mode when label_b is set. Single-entity mode otherwise.
     """
-    is_comparison = chart_data.label_b is not None
-    rows = chart_data.rows
-    n_rows = len(rows)
+    if chart_data.label_b is not None:
+        name_a_short = (
+            chart_data.label_a.split()[-1].upper()
+            if " " in chart_data.label_a
+            else chart_data.label_a.upper()
+        )
+        name_b_short = (
+            chart_data.label_b.split()[-1].upper()
+            if " " in chart_data.label_b
+            else chart_data.label_b.upper()
+        )
 
-    fig, ax = plt.subplots(figsize=(16, 9))
-    fig.patch.set_facecolor(_BG)
-    ax.set_facecolor(_BG)
-    ax.axis("off")
+        rows = [
+            (
+                r.label,
+                r.value_a,
+                r.value_b if r.value_b is not None else 0.0,
+                r.fmt == "percent",
+                r.higher_is_better,
+            )
+            for r in chart_data.rows
+        ]
 
-    # -- Title --
-    _text(ax, 0.5, 0.94, chart_data.title,
-          color=_TEXT_BRIGHT, size=26, weight="bold")
+        return _build_comparison_table(
+            title=chart_data.title,
+            subtitle=chart_data.subtitle,
+            name_a=name_a_short,
+            name_b=name_b_short,
+            full_name_a=chart_data.label_a.split()[-1],
+            full_name_b=(chart_data.label_b or "").split()[-1],
+            rows=rows,
+        )
 
-    # -- Subtitle --
-    subtitle_y = 0.895
+    return _render_single_chart(chart_data)
+
+
+def _render_single_chart(chart_data: ChartData) -> bytes:
+    """Render single-entity chart — one value column, color-coded."""
+    canvas = _make_canvas()
+
+    children: list[Column | Row | Text] = [
+        _header_text(chart_data.title),
+    ]
     if chart_data.subtitle:
-        _text(ax, 0.5, subtitle_y, chart_data.subtitle,
-              color=_TEXT_DIM, size=13)
+        children.append(_subtitle_text(chart_data.subtitle))
 
-    if is_comparison:
-        return _render_comparison(ax, fig, chart_data, rows, n_rows, subtitle_y)
-    return _render_single(ax, fig, chart_data, rows, n_rows, subtitle_y)
-
-
-def _render_comparison(
-    ax: plt.Axes,
-    fig: plt.Figure,
-    chart_data: ChartData,
-    rows: list,
-    n_rows: int,
-    subtitle_y: float,
-) -> bytes:
-    """Render comparison mode — two value columns + EDGE arrows."""
-    # -- Table header --
-    header_y = subtitle_y - 0.04
-    _hline(ax, header_y - 0.02)
-
-    # Short labels for column headers (last name or full label)
-    name_a = chart_data.label_a.split()[-1].upper() if " " in chart_data.label_a else chart_data.label_a.upper()
-    name_b = chart_data.label_b.split()[-1].upper() if chart_data.label_b and " " in chart_data.label_b else (chart_data.label_b or "").upper()
-
-    _text(ax, 0.20, header_y, "STAT", color=_TEXT_DIM, size=11, weight="bold", ha="center")
-    _text(ax, 0.40, header_y, name_a,
-          color=_ACCENT_A, size=12, weight="bold", ha="center")
-    _text(ax, 0.60, header_y, name_b,
-          color=_ACCENT_B, size=12, weight="bold", ha="center")
-    _text(ax, 0.80, header_y, "EDGE", color=_TEXT_DIM, size=11, weight="bold", ha="center")
-    _hline(ax, header_y - 0.035)
-
-    # -- Stat rows --
-    y_start = header_y - 0.08
-    row_h = 0.065 if n_rows <= 7 else 0.055
-    wins_a = 0
-    wins_b = 0
-
-    for i, row in enumerate(rows):
-        y = y_start - i * (row_h + 0.015)
-        va = row.value_a
-        vb = row.value_b if row.value_b is not None else 0.0
-
-        if i % 2 == 0:
-            _row_bg(ax, y, row_h, _ROW_ALT)
-
-        a_wins = (va > vb) if row.higher_is_better else (va < vb)
-        b_wins = (vb > va) if row.higher_is_better else (vb < va)
-        if a_wins:
-            wins_a += 1
-        elif b_wins:
-            wins_b += 1
-
-        color_a = _TEXT_BRIGHT if a_wins else _TEXT
-        color_b = _TEXT_BRIGHT if b_wins else _TEXT
-        weight_a = "bold" if a_wins else "normal"
-        weight_b = "bold" if b_wins else "normal"
-
-        _text(ax, 0.20, y, row.label, color=_TEXT_DIM, size=13, weight="bold", ha="center")
-        _text(ax, 0.40, y, _fmt_from_hint(va, row.fmt),
-              color=color_a, size=16, weight=weight_a, ha="center")
-        _text(ax, 0.60, y, _fmt_from_hint(vb, row.fmt),
-              color=color_b, size=16, weight=weight_b, ha="center")
-
-        if a_wins:
-            _text(ax, 0.80, y, "\u25c0", color=_ACCENT_A, size=14, ha="center")
-        elif b_wins:
-            _text(ax, 0.80, y, "\u25b6", color=_ACCENT_B, size=14, ha="center")
-        else:
-            _text(ax, 0.80, y, "\u2014", color=_TEXT_DIM, size=14, ha="center")
-
-    # -- Bottom divider + win tally --
-    bottom_y = y_start - n_rows * (row_h + 0.015) + 0.01
-    _hline(ax, bottom_y)
-
-    tally_y = bottom_y - 0.05
-    _text(ax, 0.35, tally_y,
-          f"\u25a0  {chart_data.label_a.split()[-1]} leads {wins_a}",
-          color=_ACCENT_A, size=13, weight="bold", ha="center")
-    _text(ax, 0.65, tally_y,
-          f"\u25a0  {(chart_data.label_b or '').split()[-1]} leads {wins_b}",
-          color=_ACCENT_B, size=13, weight="bold", ha="center")
-
-    _watermark(ax)
-    return _fig_to_bytes(fig)
-
-
-def _render_single(
-    ax: plt.Axes,
-    fig: plt.Figure,
-    chart_data: ChartData,
-    rows: list,
-    n_rows: int,
-    subtitle_y: float,
-) -> bytes:
-    """Render single-entity mode — one value column, color-coded."""
-    # -- Entity name --
-    _text(ax, 0.5, subtitle_y - 0.04, chart_data.label_a.upper(),
-          color=_ACCENT_A, size=16, weight="bold")
-
-    # -- Section header --
-    section_y = subtitle_y - 0.10
-    _hline(ax, section_y - 0.02, 0.15, 0.85)
-
-    # -- Stat rows --
-    y_start = section_y - 0.065
-    row_h = 0.07
-
-    for i, row in enumerate(rows):
-        y = y_start - i * row_h
-
-        if i % 2 == 0:
-            _row_bg(ax, y, row_h * 0.85, _ROW_ALT)
-
-        # Color based on league average if possible
-        key = _normalize_label(row.label)
-        if key:
-            color = _color_for(key, row.value_a)
-        else:
-            color = _TEXT_BRIGHT
-
-        _text(ax, 0.20, y, row.label, color=_TEXT_DIM, size=13, weight="bold", ha="left")
-        _text(ax, 0.80, y, _fmt_from_hint(row.value_a, row.fmt),
-              color=color, size=16, weight="bold", ha="right")
-
-    _watermark(ax)
-    return _fig_to_bytes(fig)
-
-
-# ---------------------------------------------------------------------------
-# Output helper
-# ---------------------------------------------------------------------------
-
-
-def _fig_to_bytes(fig: plt.Figure) -> bytes:
-    """Render a matplotlib figure to PNG bytes at 200 DPI and close it."""
-    buf = io.BytesIO()
-    fig.savefig(
-        buf,
-        format="png",
-        dpi=200,
-        bbox_inches="tight",
-        facecolor=fig.get_facecolor(),
+    # Entity label
+    children.append(
+        Text(chart_data.label_a.upper())
+            .font_size(16)
+            .font_weight(700)
+            .color(_ACCENT_A)
+            .text_align(TextAlign.CENTER)
+            .size(width="100%")
     )
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
+    children.append(_divider())
+
+    # Stat rows
+    for i, row in enumerate(chart_data.rows):
+        key = _LABEL_TO_KEY.get(row.label.upper().strip())
+        color = _color_for(key, row.value_a) if key else _TEXT_BRIGHT
+
+        row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
+        stat_row = (
+            Row(
+                Text(row.label)
+                    .font_size(14)
+                    .font_weight(700)
+                    .color(_TEXT_DIM)
+                    .flex_grow(1),
+                Text(_fmt_from_hint(row.value_a, row.fmt))
+                    .font_size(17)
+                    .font_weight(700)
+                    .color(color),
+            )
+            .size(width="100%")
+            .padding(10, 40)
+            .background_color(row_bg)
+            .border_radius(4)
+        )
+        children.append(stat_row)
+
+    children.append(_watermark())
+
+    card = (
+        Column(*children)
+        .size(width="100%", height="100%")
+        .padding(32, 40)
+        .gap(6)
+        .justify_content("start")
+    )
+
+    return _render_to_bytes(canvas, card)
