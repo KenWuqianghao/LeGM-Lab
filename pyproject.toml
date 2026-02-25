@@ -16,8 +16,8 @@ dependencies = [
     "nba_api>=1.5.0",
     "tweepy>=4.14.0",
     "httpx>=0.28.0",
-    "pictex>=2.1.0",
-    "pillow>=12.1.1",
+    "jinja2>=3.1.6",
+    "playwright>=1.58.0",
 ]
 
 [project.optional-dependencies]

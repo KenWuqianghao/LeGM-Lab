@@ -3,16 +3,16 @@
 import json
 from pathlib import Path
 
+from legm.stats.html_renderer import (
+    generate_comparison_chart,
+    generate_flexible_chart,
+    generate_stat_card,
+)
 from legm.stats.models import (
     ChartData,
     ChartRow,
     PlayerAdvancedStats,
     PlayerSeasonStats,
-)
-from legm.stats.plots import (
-    generate_comparison_chart,
-    generate_flexible_chart,
-    generate_stat_card,
 )
 
 # KD's best Warriors season (2018-19) — realistic stats

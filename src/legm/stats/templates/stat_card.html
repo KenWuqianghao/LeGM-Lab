@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 680px;
+  height: 880px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+.card {
+  width: 680px;
+  height: 880px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, {{ bg_dark }} 0%, #0a0e17 50%, {{ bg_dark_secondary }} 100%);
+}
+
+.accent-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, {{ color_primary }}, {{ color_secondary }});
+  z-index: 5;
+}
+
+.glow {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 500px;
+  background: radial-gradient(ellipse, {{ color_primary }}25 0%, transparent 65%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+  position: relative;
+  z-index: 2;
+}
+
+.headshot-ring {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, {{ color_primary }}50, {{ color_secondary }}50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 0 60px {{ color_primary }}20;
+}
+
+.headshot-ring::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #0d1117;
+}
+
+.headshot-ring img {
+  width: 186px;
+  height: 186px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 50%;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
+}
+
+.player-name {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 16px;
+}
+
+.player-meta {
+  font-size: 13px;
+  color: #667788;
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+.hero-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+
+.hero-number {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 60px;
+  font-weight: 700;
+  color: {{ color_primary }};
+  text-shadow: 0 0 40px {{ color_primary }}60;
+  line-height: 1;
+}
+
+.hero-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: #667788;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.stat-grid {
+  padding: 24px 40px 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.stat-grid::before {
+  content: '';
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  margin-bottom: 16px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.stat-item:nth-child(odd) {
+  background: rgba(255,255,255,0.03);
+}
+
+.stat-name {
+  width: 70px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #667788;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  flex-shrink: 0;
+}
+
+.stat-bar-wrap {
+  flex: 1;
+  height: 7px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  margin: 0 16px;
+  overflow: hidden;
+}
+
+.stat-bar {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.stat-value {
+  width: 65px;
+  text-align: right;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.watermark {
+  position: absolute;
+  bottom: 16px;
+  right: 40px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff18;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  z-index: 2;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="accent-top"></div>
+  <div class="glow"></div>
+
+  <div class="hero">
+    {% if headshot_url %}
+    <div class="headshot-ring">
+      <img src="{{ headshot_url }}" alt="{{ player_name }}">
+    </div>
+    {% endif %}
+    <div class="player-name">{{ player_name }}</div>
+    <div class="player-meta">{{ meta }}</div>
+    <div class="hero-stat">
+      <div class="hero-number">{{ hero_value }}</div>
+      <div class="hero-label">{{ hero_label }}</div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    {% for stat in stats %}
+    <div class="stat-item">
+      <div class="stat-name">{{ stat.label }}</div>
+      <div class="stat-bar-wrap">
+        <div class="stat-bar" style="width: {{ stat.bar_pct }}%; background: {{ stat.color }};"></div>
+      </div>
+      <div class="stat-value" style="color: {{ stat.color }};">{{ stat.display }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="watermark">LeGM</div>
+</div>
+</body>
+</html>

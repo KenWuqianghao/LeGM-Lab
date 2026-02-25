@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 1200px;
+  height: 675px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+.card {
+  width: 1200px;
+  height: 675px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0d1117 0%, #0a0e17 50%, {{ verdict_bg_tint }} 100%);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.verdict-glow {
+  position: absolute;
+  top: 50%;
+  right: 15%;
+  transform: translate(50%, -50%);
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, {{ verdict_color }}18 0%, transparent 60%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.layout {
+  display: flex;
+  height: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 48px 40px 48px 56px;
+}
+
+.right {
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 60px 48px 40px;
+}
+
+.take-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #556677;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+
+.take-text {
+  font-size: 26px;
+  font-weight: 700;
+  color: #d8e4ee;
+  line-height: 1.4;
+  max-height: 160px;
+  overflow: hidden;
+  position: relative;
+  padding-left: 28px;
+}
+
+.take-text::before {
+  content: '\201C';
+  font-size: 56px;
+  color: {{ verdict_color }}50;
+  position: absolute;
+  top: -16px;
+  left: -4px;
+  font-family: Georgia, serif;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: auto;
+}
+
+.player-row img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 50%;
+  border: 2px solid {{ verdict_color }}50;
+  flex-shrink: 0;
+}
+
+.roast-text {
+  font-size: 18px;
+  color: #b0c0d0;
+  line-height: 1.45;
+  max-height: 100px;
+  overflow: hidden;
+  font-style: italic;
+}
+
+.verdict-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.verdict-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 56px;
+  border-radius: 14px;
+  background: {{ verdict_color }}15;
+  border: 2px solid {{ verdict_color }}80;
+  box-shadow:
+    0 0 20px {{ verdict_color }}10,
+    0 0 60px {{ verdict_color }}08;
+}
+
+.verdict-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 42px;
+  font-weight: 700;
+  color: {{ verdict_color }};
+  letter-spacing: 8px;
+  text-transform: uppercase;
+}
+
+.confidence {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.confidence-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #556677;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.confidence-bar {
+  width: 180px;
+  height: 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: {{ verdict_color }};
+}
+
+.confidence-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: {{ verdict_color }};
+}
+
+.stats-used {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.stats-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #556677;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.stat-chip {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px;
+  color: #99aabb;
+  margin: 3px 4px;
+}
+
+.v-divider {
+  position: absolute;
+  top: 15%;
+  bottom: 15%;
+  left: calc(100% - 480px);
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, #ffffff18, transparent);
+  z-index: 3;
+}
+
+.accent-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, {{ verdict_color }}, transparent);
+  z-index: 5;
+}
+
+.watermark {
+  position: absolute;
+  bottom: 16px;
+  right: 24px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff18;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  z-index: 4;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="verdict-glow"></div>
+
+  <div class="layout">
+    <div class="left">
+      <div class="take-label">Original Take</div>
+      <div class="take-text">{{ take_text }}</div>
+
+      <div class="player-row">
+        {% if headshot_url %}
+        <img src="{{ headshot_url }}" alt="">
+        {% endif %}
+        <div class="roast-text">{{ roast }}</div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="verdict-container">
+        <div class="verdict-badge">
+          <div class="verdict-label">{{ verdict }}</div>
+        </div>
+
+        <div class="confidence">
+          <div class="confidence-label">Confidence</div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" style="width: {{ confidence_pct }}%;"></div>
+          </div>
+          <div class="confidence-value">{{ confidence_pct }}%</div>
+        </div>
+
+        {% if stats_used %}
+        <div class="stats-used">
+          <div class="stats-title">Evidence Used</div>
+          <div style="text-align: center;">
+            {% for stat in stats_used %}
+            <span class="stat-chip">{{ stat }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="v-divider"></div>
+  <div class="accent-bottom"></div>
+  <div class="watermark">LeGM</div>
+</div>
+</body>
+</html>

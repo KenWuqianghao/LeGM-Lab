@@ -8,8 +8,8 @@ from legm.agent.prompts import LEGM_SYSTEM_PROMPT
 from legm.agent.tools import TOOL_DEFINITIONS, execute_tool
 from legm.llm.base import LLMProvider
 from legm.llm.types import Message
+from legm.stats.html_renderer import generate_flexible_chart
 from legm.stats.models import ChartData
-from legm.stats.plots import generate_flexible_chart
 from legm.stats.service import NBAStatsService
 
 logger = logging.getLogger(__name__)

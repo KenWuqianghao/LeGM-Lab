@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 1200px;
+  height: 675px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow: hidden;
+  background: {{ bg_color_a }};
+}
+
+.card {
+  width: 1200px;
+  height: 675px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, {{ bg_dark_a }} 0%, #0a0e17 40%, #0a0e17 60%, {{ bg_dark_b }} 100%);
+}
+
+.glow-left {
+  position: absolute;
+  top: -60px;
+  left: -80px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, {{ glow_a }}30 0%, transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.glow-right {
+  position: absolute;
+  top: -60px;
+  right: -80px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, {{ glow_b }}30 0%, transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.players {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 28px 60px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 260px;
+}
+
+.player img {
+  width: 220px;
+  height: 160px;
+  object-fit: cover;
+  object-position: top center;
+  filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
+}
+
+.player-name {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 8px;
+}
+
+.player-meta {
+  font-size: 12px;
+  color: #778899;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.vs-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.vs-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff35;
+  letter-spacing: 8px;
+}
+
+.title {
+  font-size: 14px;
+  color: #667788;
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+.stats {
+  padding: 16px 60px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  padding: 0 16px;
+}
+
+.stat-row:nth-child(odd) {
+  background: rgba(255,255,255,0.03);
+}
+
+.stat-row + .stat-row {
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
+
+.stat-label {
+  width: 80px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #778899;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.stat-values {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.value-a {
+  width: 80px;
+  text-align: right;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.value-b {
+  width: 80px;
+  text-align: left;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.bar-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 8px;
+  gap: 4px;
+}
+
+.bar-a {
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+  margin-left: auto;
+}
+
+.bar-b {
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+.bar-divider {
+  width: 2px;
+  height: 16px;
+  background: #ffffff18;
+  flex-shrink: 0;
+}
+
+.winner { color: #fff; }
+.loser { color: #556677; }
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 60px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.tally {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.tally-a { color: {{ color_a }}; }
+.tally-b { color: {{ color_b }}; }
+
+.watermark {
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff18;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.accent-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, {{ color_a }}, transparent 40%, transparent 60%, {{ color_b }});
+  z-index: 3;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="glow-left"></div>
+  <div class="glow-right"></div>
+
+  <div class="players">
+    <div class="player">
+      {% if headshot_a %}
+      <img src="{{ headshot_a }}" alt="{{ name_a }}">
+      {% endif %}
+      <div class="player-name">{{ name_a }}</div>
+      <div class="player-meta">{{ meta_a }}</div>
+    </div>
+
+    <div class="vs-badge">
+      <div class="vs-text">VS</div>
+      <div class="title">{{ subtitle }}</div>
+    </div>
+
+    <div class="player">
+      {% if headshot_b %}
+      <img src="{{ headshot_b }}" alt="{{ name_b }}">
+      {% endif %}
+      <div class="player-name">{{ name_b }}</div>
+      <div class="player-meta">{{ meta_b }}</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    {% for stat in stats %}
+    <div class="stat-row">
+      <div class="stat-label">{{ stat.label }}</div>
+      <div class="stat-values">
+        <div class="value-a {{ 'winner' if stat.a_wins else 'loser' }}" style="{{ 'text-shadow: 0 0 16px ' + color_a + '60;' if stat.a_wins else '' }}">{{ stat.fmt_a }}</div>
+        <div class="bar-container">
+          <div class="bar-a" style="width: {{ stat.bar_pct_a }}%; background: {{ color_a }}{{ 'cc' if stat.a_wins else '55' }};"></div>
+          <div class="bar-divider"></div>
+          <div class="bar-b" style="width: {{ stat.bar_pct_b }}%; background: {{ color_b }}{{ 'cc' if stat.b_wins else '55' }};"></div>
+        </div>
+        <div class="value-b {{ 'winner' if stat.b_wins else 'loser' }}" style="{{ 'text-shadow: 0 0 16px ' + color_b + '60;' if stat.b_wins else '' }}">{{ stat.fmt_b }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="footer">
+    <div class="tally tally-a">{{ name_a_short }} leads {{ wins_a }}</div>
+    <div class="watermark">LeGM</div>
+    <div class="tally tally-b">{{ name_b_short }} leads {{ wins_b }}</div>
+  </div>
+
+  <div class="accent-line"></div>
+</div>
+</body>
+</html>

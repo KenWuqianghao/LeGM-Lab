@@ -5,18 +5,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps for skia-python (used by pictex for chart rendering)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libegl1 libgl1 libgles2 libfontconfig1 && \
-    rm -rf /var/lib/apt/lists/*
-
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Install dependencies first (layer caching)
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --no-install-project
+
+# Install Playwright Chromium + its system deps
+RUN uv run playwright install --with-deps chromium
 
 # Copy source code
 COPY src/ src/
@@ -27,8 +24,8 @@ COPY alembic.ini .
 # Install the project itself
 RUN uv sync --no-dev
 
-# Verify pictex/skia imports work (fail fast if system deps are missing)
-RUN uv run python -c "from pictex import Canvas; print('pictex OK')"
+# Verify HTML renderer imports work (fail fast if deps are missing)
+RUN uv run python -c "from legm.stats.html_renderer import generate_flexible_chart; print('html_renderer OK')"
 
 # Create data directory for SQLite persistence
 RUN mkdir -p /app/data
