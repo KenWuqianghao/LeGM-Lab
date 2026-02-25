@@ -169,10 +169,14 @@ class TweetFilter:
             logger.debug("Skipping retweet: %s", text[:60])
             return True
 
-        # Skip link-only tweets (just URLs, maybe with whitespace)
+        # Skip tweets that are mostly links (LLM can't see linked content)
         stripped = re.sub(r"https?://\S+", "", text).strip()
         if not stripped:
             logger.debug("Skipping link-only tweet: %s", text[:60])
+            return True
+        has_url = "http://" in text or "https://" in text
+        if has_url and len(stripped) < 30 and not is_mention:
+            logger.debug("Skipping link-heavy tweet: %s", text[:60])
             return True
 
         # Skip blocked accounts

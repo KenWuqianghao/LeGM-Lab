@@ -136,14 +136,14 @@ def _fmt(val: float, *, is_pct: bool = False, is_plus: bool = False) -> str:
     return f"{val:.1f}"
 
 
-def _render_html_to_png(
+def _render_html_to_png_sync(
     html: str,
     width: int,
     height: int,
     *,
     device_scale_factor: int = 2,
 ) -> bytes:
-    """Render an HTML string to PNG bytes using Playwright."""
+    """Render HTML to PNG synchronously. Must NOT be called from an async loop."""
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w") as f:
         f.write(html)
         html_path = f.name
@@ -155,12 +155,43 @@ def _render_html_to_png(
             device_scale_factor=device_scale_factor,
         )
         page.goto(f"file://{html_path}")
-        # Wait for fonts to load
         page.wait_for_load_state("networkidle")
         png_bytes = page.screenshot(type="png")
         browser.close()
 
     return png_bytes
+
+
+def _render_html_to_png(
+    html: str,
+    width: int,
+    height: int,
+    *,
+    device_scale_factor: int = 2,
+) -> bytes:
+    """Render HTML to PNG, safe to call from both sync and async contexts."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No event loop — call sync directly (scripts, tests)
+        return _render_html_to_png_sync(
+            html, width, height, device_scale_factor=device_scale_factor
+        )
+
+    # Inside an event loop — run sync Playwright in a worker thread
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            _render_html_to_png_sync,
+            html,
+            width,
+            height,
+            device_scale_factor=device_scale_factor,
+        )
+        return future.result()
 
 
 # ---------------------------------------------------------------------------

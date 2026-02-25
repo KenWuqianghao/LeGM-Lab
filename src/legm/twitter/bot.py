@@ -5,6 +5,8 @@ import contextlib
 import logging
 from typing import Any
 
+import tweepy
+
 from legm.agent.analyzer import TakeAnalyzer
 from legm.config import Settings
 from legm.db.repository import TakeRepository
@@ -123,6 +125,19 @@ class LeGMBot:
 
         logger.info("Processing %d mentions", len(mentions))
 
+        # Advance since_id BEFORE processing so restarts don't re-fetch
+        max_id = max(
+            (m["id"] for m in mentions if m.get("id")),
+            default=None,
+        )
+        if max_id and (
+            self._since_id is None or int(max_id) > int(self._since_id)
+        ):
+            self._since_id = max_id
+            await self._repository.set_config(
+                "mentions_since_id", self._since_id
+            )
+
         for mention in mentions:
             try:
                 await self._handle_mention(mention)
@@ -131,14 +146,6 @@ class LeGMBot:
                     "Failed to handle mention %s",
                     mention.get("id"),
                 )
-
-            # Track the newest mention ID regardless of success
-            mention_id = mention.get("id")
-            if mention_id and (
-                self._since_id is None or int(mention_id) > int(self._since_id)
-            ):
-                self._since_id = mention_id
-                await self._repository.set_config("mentions_since_id", self._since_id)
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
@@ -266,14 +273,20 @@ class LeGMBot:
             max_results=20,
         )
 
-        # Filter candidates
+        # Filter candidates and skip ones we've already engaged with
         candidates = [t for t in tweets if not self._filter.should_skip(t)]
-        if not candidates:
+        viable = []
+        for t in candidates:
+            if await self._repository.has_replied_to(t["id"]):
+                continue
+            viable.append(t)
+
+        if not viable:
             logger.debug("No viable candidates found in search")
             return
 
         # Pick the "spiciest" — shortest text is often the boldest take
-        best = min(candidates, key=lambda t: len(t.get("text", "")))
+        best = min(viable, key=lambda t: len(t.get("text", "")))
         logger.info("Selected proactive target: %s", best["text"][:80])
 
         take_text = best["text"]
@@ -298,17 +311,24 @@ class LeGMBot:
             )
             return
 
-        if analysis.chart_png:
-            tweet_id = await self._twitter.post_tweet_with_media(
-                text=analysis.roast,
-                image_bytes=analysis.chart_png,
-                quote_tweet_id=best["id"],
+        try:
+            if analysis.chart_png:
+                tweet_id = await self._twitter.post_tweet_with_media(
+                    text=analysis.roast,
+                    image_bytes=analysis.chart_png,
+                    quote_tweet_id=best["id"],
+                )
+            else:
+                tweet_id = await self._twitter.quote_tweet(
+                    text=analysis.roast,
+                    quoted_tweet_url=f"https://x.com/i/status/{best['id']}",
+                )
+        except tweepy.errors.Forbidden:
+            logger.warning(
+                "Cannot quote tweet %s (forbidden), skipping",
+                best["id"],
             )
-        else:
-            tweet_id = await self._twitter.quote_tweet(
-                text=analysis.roast,
-                quoted_tweet_url=f"https://x.com/i/status/{best['id']}",
-            )
+            return
 
         self._rate_limiter.record_post()
         self._daily_proactive_count += 1
