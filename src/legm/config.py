@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     )
     bot_monthly_budget: int = Field(default=450, description="Monthly tweet budget")
     bot_dry_run: bool = Field(default=False, description="Log actions without posting")
+    bot_proactive_enabled: bool = Field(
+        default=False, description="Enable proactive tweet searching"
+    )
 
 
 settings = Settings()

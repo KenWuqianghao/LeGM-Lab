@@ -65,10 +65,13 @@ class LeGMBot:
             self._reactive_loop(),
             name="legm-reactive",
         )
-        self._proactive_task = asyncio.create_task(
-            self._proactive_loop(),
-            name="legm-proactive",
-        )
+        if self._settings.bot_proactive_enabled:
+            self._proactive_task = asyncio.create_task(
+                self._proactive_loop(),
+                name="legm-proactive",
+            )
+        else:
+            logger.info("Proactive loop disabled (BOT_PROACTIVE_ENABLED=false)")
         logger.info("LeGMBot started (dry_run=%s)", self._settings.bot_dry_run)
 
     async def stop(self) -> None:
