@@ -27,8 +27,8 @@ RUN uv sync --no-dev
 # Verify HTML renderer imports work (fail fast if deps are missing)
 RUN uv run python -c "from legm.stats.html_renderer import generate_flexible_chart; print('html_renderer OK')"
 
-# Create data directory for SQLite persistence
-RUN mkdir -p /app/data
+# Create volume mount point for SQLite persistence (Railway volume mounts here)
+RUN mkdir -p /data
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD pgrep -f "run_bot" || exit 1
