@@ -145,15 +145,16 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
-        # Only reply to direct mentions, not replies in a thread.
-        # If the tweet is a reply and it's NOT replying to the bot, skip it.
+        # Skip replies to the bot's own tweets (thread noise from other users
+        # replying to the bot's reply).  Keep everything else: direct mentions,
+        # and mentions where someone replies to another user's tweet and tags
+        # the bot for analysis.
         reply_to = mention.get("in_reply_to_user_id")
         bot_user_id = self._settings.twitter_bot_user_id
-        if reply_to and reply_to != bot_user_id:
+        if reply_to and reply_to == bot_user_id:
             logger.debug(
-                "Skipping thread reply %s (replying to %s, not bot)",
+                "Skipping thread reply to bot's own tweet %s",
                 mention["id"],
-                reply_to,
             )
             return
 
