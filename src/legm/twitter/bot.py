@@ -145,6 +145,11 @@ class LeGMBot:
         if self._filter.should_skip(mention, is_mention=True):
             return
 
+        # Dedup: skip mentions we've already replied to
+        if await self._repository.has_replied_to(mention["id"]):
+            logger.info("Already replied to mention %s, skipping", mention["id"])
+            return
+
         if not self._rate_limiter.can_post():
             logger.warning("Rate limit reached, skipping mention %s", mention["id"])
             return

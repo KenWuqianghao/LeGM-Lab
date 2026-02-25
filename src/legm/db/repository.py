@@ -110,6 +110,22 @@ class TakeRepository:
             await session.refresh(tweet)
         return tweet
 
+    async def has_replied_to(self, source_tweet_id: str) -> bool:
+        """Check if a take already exists for the given source tweet.
+
+        Args:
+            source_tweet_id: The Twitter ID of the mention/tweet.
+
+        Returns:
+            True if a take with this source_tweet_id already exists.
+        """
+        stmt = select(func.count(Take.id)).where(
+            Take.source_tweet_id == source_tweet_id,
+        )
+        async with self._session_factory() as session:
+            result = await session.execute(stmt)
+            return result.scalar_one() > 0
+
     async def get_monthly_tweet_count(self) -> int:
         """Count tweets created in the current calendar month.
 
