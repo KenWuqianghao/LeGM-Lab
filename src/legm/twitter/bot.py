@@ -223,17 +223,24 @@ class LeGMBot:
             )
             return
 
-        if analysis.chart_png:
-            tweet_id = await self._twitter.post_tweet_with_media(
-                text=reply_text,
-                image_bytes=analysis.chart_png,
-                in_reply_to_tweet_id=mention["id"],
+        try:
+            if analysis.chart_png:
+                tweet_id = await self._twitter.post_tweet_with_media(
+                    text=reply_text,
+                    image_bytes=analysis.chart_png,
+                    in_reply_to_tweet_id=mention["id"],
+                )
+            else:
+                tweet_id = await self._twitter.reply_to_tweet(
+                    text=reply_text,
+                    in_reply_to_tweet_id=mention["id"],
+                )
+        except tweepy.errors.Forbidden:
+            logger.error(
+                "403 Forbidden when replying to %s — check Twitter API permissions",
+                mention["id"],
             )
-        else:
-            tweet_id = await self._twitter.reply_to_tweet(
-                text=reply_text,
-                in_reply_to_tweet_id=mention["id"],
-            )
+            return
 
         self._rate_limiter.record_post()
 
