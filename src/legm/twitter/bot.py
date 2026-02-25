@@ -115,6 +115,7 @@ class LeGMBot:
         )
 
         if not mentions:
+            logger.info("No new mentions (since_id=%s)", self._since_id)
             return
 
         logger.info("Processing %d mentions", len(mentions))
@@ -220,8 +221,8 @@ class LeGMBot:
             logger.debug("Rate limit prevents proactive posting")
             return
 
-        # Search with a broad NBA takes query
-        query = "NBA take -is:retweet -is:reply lang:en"
+        # Search for opinionated NBA tweets
+        query = "(NBA OR basketball) (washed OR goat OR mvp OR overrated OR underrated OR better than OR worst OR best) -is:retweet -is:reply lang:en"
         tweets = await self._twitter.search_recent_tweets(
             query=query,
             max_results=20,
@@ -253,7 +254,7 @@ class LeGMBot:
 
         if self._settings.bot_dry_run:
             logger.info(
-                "[DRY RUN] Would reply to %s: %s",
+                "[DRY RUN] Would post about %s: %s",
                 best["id"],
                 analysis.roast,
             )
@@ -263,13 +264,9 @@ class LeGMBot:
             tweet_id = await self._twitter.post_tweet_with_media(
                 text=analysis.roast,
                 image_bytes=analysis.chart_png,
-                in_reply_to_tweet_id=best["id"],
             )
         else:
-            tweet_id = await self._twitter.reply_to_tweet(
-                text=analysis.roast,
-                in_reply_to_tweet_id=best["id"],
-            )
+            tweet_id = await self._twitter.post_tweet(text=analysis.roast)
 
         self._rate_limiter.record_post()
         self._daily_proactive_count += 1
@@ -277,14 +274,14 @@ class LeGMBot:
         await self._repository.record_tweet(
             take_id=take.id,
             tweet_id=tweet_id,
-            tweet_type="reply",
+            tweet_type="standalone",
             content=analysis.roast,
         )
 
         logger.info(
-            "Replied to %s with tweet %s (daily: %d/%d)",
-            best["id"],
+            "Posted tweet %s inspired by %s (daily: %d/%d)",
             tweet_id,
+            best["id"],
             self._daily_proactive_count,
             self._settings.bot_max_daily_proactive,
         )
