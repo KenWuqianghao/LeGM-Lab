@@ -138,7 +138,7 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply."""
-        if self._filter.should_skip(mention):
+        if self._filter.should_skip(mention, is_mention=True):
             return
 
         if not self._rate_limiter.can_post():
@@ -253,7 +253,7 @@ class LeGMBot:
 
         if self._settings.bot_dry_run:
             logger.info(
-                "[DRY RUN] Would post about %s: %s",
+                "[DRY RUN] Would reply to %s: %s",
                 best["id"],
                 analysis.roast,
             )
@@ -263,9 +263,13 @@ class LeGMBot:
             tweet_id = await self._twitter.post_tweet_with_media(
                 text=analysis.roast,
                 image_bytes=analysis.chart_png,
+                in_reply_to_tweet_id=best["id"],
             )
         else:
-            tweet_id = await self._twitter.post_tweet(text=analysis.roast)
+            tweet_id = await self._twitter.reply_to_tweet(
+                text=analysis.roast,
+                in_reply_to_tweet_id=best["id"],
+            )
 
         self._rate_limiter.record_post()
         self._daily_proactive_count += 1
@@ -273,14 +277,14 @@ class LeGMBot:
         await self._repository.record_tweet(
             take_id=take.id,
             tweet_id=tweet_id,
-            tweet_type="standalone",
+            tweet_type="reply",
             content=analysis.roast,
         )
 
         logger.info(
-            "Posted standalone tweet %s (source: %s, daily: %d/%d)",
-            tweet_id,
+            "Replied to %s with tweet %s (daily: %d/%d)",
             best["id"],
+            tweet_id,
             self._daily_proactive_count,
             self._settings.bot_max_daily_proactive,
         )

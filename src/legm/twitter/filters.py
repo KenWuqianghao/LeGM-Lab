@@ -148,11 +148,15 @@ class TweetFilter:
         text_lower = tweet_text.lower()
         return any(keyword in text_lower for keyword in self.NBA_KEYWORDS)
 
-    def should_skip(self, tweet: dict[str, Any]) -> bool:
+    def should_skip(
+        self, tweet: dict[str, Any], *, is_mention: bool = False
+    ) -> bool:
         """Determine whether the bot should skip this tweet.
 
         Args:
             tweet: A dict with at least ``text`` and ``author_id`` keys.
+            is_mention: If True, skip the NBA-keyword and length checks
+                since the user explicitly @'d the bot.
 
         Returns:
             True if the tweet should be skipped (i.e., not engaged with).
@@ -175,6 +179,10 @@ class TweetFilter:
         if author_id in self._blocked_accounts:
             logger.debug("Skipping blocked author %s", author_id)
             return True
+
+        # For direct mentions, skip relevance check — they asked for it
+        if is_mention:
+            return False
 
         # Skip if not NBA-relevant
         if not self.is_relevant(text):
