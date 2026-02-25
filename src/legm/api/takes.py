@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from legm.dependencies import TakeAnalyzerDep, TakeRepositoryDep
@@ -35,6 +35,20 @@ class TakeResponse(BaseModel):
     roast: str
     reasoning: str
     stats_used: list[str]
+    created_at: datetime
+
+
+class TakeDetailResponse(BaseModel):
+    """Response for a single take with chart URL."""
+
+    id: int
+    take_text: str
+    verdict: str
+    confidence: float
+    roast: str
+    reasoning: str
+    stats_used: list[str]
+    chart_url: str | None = None
     created_at: datetime
 
 
@@ -90,6 +104,37 @@ async def analyze_take(
 
 
 @router.get(
+    "/{take_id}",
+    response_model=TakeDetailResponse,
+    summary="Get a single take analysis",
+    description="Retrieve a take by ID, including chart URL if available.",
+)
+async def get_take(
+    take_id: int,
+    repo: TakeRepositoryDep,
+    request: Request,
+) -> TakeDetailResponse:
+    """Fetch a single take by ID."""
+    take = await repo.get(take_id)
+    if take is None:
+        raise HTTPException(status_code=404, detail="Take not found")
+
+    chart_url = _find_chart(take.id, request)
+
+    return TakeDetailResponse(
+        id=take.id,
+        take_text=take.take_text,
+        verdict=take.verdict,
+        confidence=take.confidence,
+        roast=take.roast,
+        reasoning=take.reasoning,
+        stats_used=take.stats_used or [],
+        chart_url=chart_url,
+        created_at=take.created_at,
+    )
+
+
+@router.get(
     "",
     response_model=list[TakeResponse],
     summary="List past take analyses",
@@ -115,6 +160,14 @@ async def list_takes(
         )
         for t in takes
     ]
+
+
+def _find_chart(take_id: int, request: Request) -> str | None:
+    """Look up an existing chart PNG for a take."""
+    matches = list(CHARTS_DIR.glob(f"take_{take_id}_*.png"))
+    if not matches:
+        return None
+    return str(request.url_for("charts", path=matches[0].name))
 
 
 def _save_chart(chart_png: bytes, take_id: int, request: Request) -> str:

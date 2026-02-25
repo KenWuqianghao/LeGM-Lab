@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from legm.agent.analyzer import TakeAnalyzer
@@ -63,6 +64,16 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = app_settings
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://legm-lab.vercel.app",
+        ],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(root_router)
 
     # Static files for generated charts

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1A1210"/>
+      <stop offset="100%" stop-color="#110E0B"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E8612D"/>
+      <stop offset="100%" stop-color="#C4441A"/>
+    </linearGradient>
+    <linearGradient id="crown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#D4950C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+
+  <!-- Basketball body — perfectly centered at 256,256 -->
+  <circle cx="256" cy="256" r="140" fill="url(#ball)" opacity="0.15"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="url(#ball)" stroke-width="4" opacity="0.4"/>
+
+  <!-- Basketball seams -->
+  <path d="M256 116c-40 46-62 82-62 140s22 94 62 140" fill="none" stroke="#E8612D" stroke-width="2.5" opacity="0.25"/>
+  <path d="M256 116c40 46 62 82 62 140s-22 94-62 140" fill="none" stroke="#E8612D" stroke-width="2.5" opacity="0.25"/>
+  <line x1="116" y1="256" x2="396" y2="256" stroke="#E8612D" stroke-width="2.5" opacity="0.25"/>
+
+  <!-- Crown — sits above center -->
+  <path d="M168 179 L192 129 L228 164 L256 109 L284 164 L320 129 L344 179 Z" fill="url(#crown)"/>
+  <rect x="168" y="179" width="176" height="18" rx="4" fill="url(#crown)"/>
+  <!-- Crown jewel dots -->
+  <circle cx="216" cy="162" r="5" fill="#110E0B" opacity="0.3"/>
+  <circle cx="256" cy="139" r="6" fill="#110E0B" opacity="0.3"/>
+  <circle cx="296" cy="162" r="5" fill="#110E0B" opacity="0.3"/>
+
+  <!-- L lettermark — vertically centered in the ball -->
+  <text x="256" y="310" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="140" fill="#F2EDE8" letter-spacing="-4">L</text>
+
+  <!-- Subtle ring -->
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#F5A623" stroke-width="1" opacity="0.1"/>
+</svg>
