@@ -3,8 +3,17 @@
 import json
 from pathlib import Path
 
-from legm.stats.models import ChartData, ChartRow, PlayerAdvancedStats, PlayerSeasonStats
-from legm.stats.plots import generate_comparison_chart, generate_flexible_chart, generate_stat_card
+from legm.stats.models import (
+    ChartData,
+    ChartRow,
+    PlayerAdvancedStats,
+    PlayerSeasonStats,
+)
+from legm.stats.plots import (
+    generate_comparison_chart,
+    generate_flexible_chart,
+    generate_stat_card,
+)
 
 # --- 2016 Finals data (LeBron vs Steph) ---
 

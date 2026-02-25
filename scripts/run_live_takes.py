@@ -1,7 +1,6 @@
 """Run real takes through the full agent pipeline with a live LLM."""
 
 import asyncio
-import json
 from pathlib import Path
 
 from legm.agent.analyzer import TakeAnalyzer

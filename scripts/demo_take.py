@@ -1,11 +1,19 @@
 """Demo script: analyze "KD was the best player on the Warriors team"."""
 
 import json
-import sys
 from pathlib import Path
 
-from legm.stats.models import ChartData, ChartRow, PlayerAdvancedStats, PlayerSeasonStats
-from legm.stats.plots import generate_comparison_chart, generate_flexible_chart, generate_stat_card
+from legm.stats.models import (
+    ChartData,
+    ChartRow,
+    PlayerAdvancedStats,
+    PlayerSeasonStats,
+)
+from legm.stats.plots import (
+    generate_comparison_chart,
+    generate_flexible_chart,
+    generate_stat_card,
+)
 
 # KD's best Warriors season (2018-19) — realistic stats
 kd_basic = PlayerSeasonStats(

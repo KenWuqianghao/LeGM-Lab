@@ -141,7 +141,7 @@ class LeGMBot:
                 await self._repository.set_config("mentions_since_id", self._since_id)
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
-        """Analyze a single mention and reply."""
+        """Analyze a single mention and reply, including conversation context."""
         if self._filter.should_skip(mention, is_mention=True):
             return
 
@@ -150,7 +150,32 @@ class LeGMBot:
             return
 
         take_text = mention["text"]
-        analysis = await self._analyzer.analyze(take_text)
+
+        # Fetch conversation thread for richer context
+        context_text = take_text
+        try:
+            thread_texts = await self._twitter.get_conversation_thread(
+                mention["id"],
+                max_parents=5,
+            )
+            if thread_texts:
+                thread_block = "\n".join(thread_texts)
+                context_text = (
+                    f"Thread context:\n{thread_block}\n\nMention: {take_text}"
+                )
+                logger.info(
+                    "Built thread context with %d parent tweets for mention %s",
+                    len(thread_texts),
+                    mention["id"],
+                )
+        except Exception:
+            logger.exception(
+                "Failed to fetch conversation thread for mention %s, "
+                "falling back to mention text only",
+                mention["id"],
+            )
+
+        analysis = await self._analyzer.analyze(context_text)
 
         # Persist the take
         take = await self._repository.create(
@@ -225,7 +250,12 @@ class LeGMBot:
             return
 
         # Search for opinionated NBA tweets
-        query = "(NBA OR basketball) (washed OR goat OR mvp OR overrated OR underrated OR better than OR worst OR best) -is:retweet -is:reply lang:en"
+        query = (
+            "(NBA OR basketball)"
+            " (washed OR goat OR mvp OR overrated OR underrated"
+            " OR better than OR worst OR best)"
+            " -is:retweet -is:reply lang:en"
+        )
         tweets = await self._twitter.search_recent_tweets(
             query=query,
             max_results=20,

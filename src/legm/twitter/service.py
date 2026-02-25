@@ -190,6 +190,82 @@ class TwitterService:
         logger.info("Found %d tweets for query: %s", len(tweets), query)
         return tweets
 
+    async def get_conversation_thread(
+        self,
+        tweet_id: str,
+        *,
+        max_parents: int = 5,
+    ) -> list[str]:
+        """Walk up the reply chain from a tweet and return texts in chronological order.
+
+        Follows ``referenced_tweets`` of type ``replied_to`` until the root
+        tweet is reached or *max_parents* tweets have been collected.
+
+        Args:
+            tweet_id: The starting tweet ID (typically the mention).
+            max_parents: Maximum number of parent tweets to fetch.
+
+        Returns:
+            List of tweet texts ordered root-first (chronological).  The
+            starting tweet is **not** included in the returned list.
+        """
+        thread_texts: list[str] = []
+        current_id = tweet_id
+        tweet_fields = [
+            "conversation_id",
+            "referenced_tweets",
+            "author_id",
+            "created_at",
+        ]
+
+        for _ in range(max_parents):
+            response = await asyncio.to_thread(
+                self._client.get_tweet,
+                current_id,
+                tweet_fields=tweet_fields,
+            )
+
+            if not response.data:
+                logger.debug("No data returned for tweet %s", current_id)
+                break
+
+            tweet = response.data
+
+            # Find the "replied_to" reference
+            parent_id: str | None = None
+            if tweet.referenced_tweets:
+                for ref in tweet.referenced_tweets:
+                    if ref.type == "replied_to":
+                        parent_id = str(ref.id)
+                        break
+
+            if parent_id is None:
+                # Reached root of the conversation (or an original tweet)
+                break
+
+            # Fetch the parent tweet text
+            parent_response = await asyncio.to_thread(
+                self._client.get_tweet,
+                parent_id,
+                tweet_fields=tweet_fields,
+            )
+
+            if not parent_response.data:
+                logger.debug("Could not fetch parent tweet %s", parent_id)
+                break
+
+            thread_texts.append(parent_response.data.text)
+            current_id = parent_id
+
+        # Reverse so root tweet comes first (chronological order)
+        thread_texts.reverse()
+        logger.info(
+            "Fetched %d parent tweets for thread starting at %s",
+            len(thread_texts),
+            tweet_id,
+        )
+        return thread_texts
+
     async def get_mentions(
         self,
         user_id: str,

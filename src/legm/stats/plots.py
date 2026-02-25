@@ -1,10 +1,18 @@
-"""Chart generation for LeGM take analysis — PicTex-powered stat cards."""
+"""Chart generation for LeGM take analysis — PicTex-powered stat cards.
+
+StatMuse-inspired design with player headshots, team-colored gradients,
+and dynamic canvas sizing.
+"""
 
 import io
+import logging
+import tempfile
 
+import httpx
 from pictex import (
     Canvas,
     Column,
+    Image,
     LinearGradient,
     Row,
     Shadow,
@@ -14,12 +22,43 @@ from pictex import (
 
 from legm.stats.models import ChartData, PlayerAdvancedStats, PlayerSeasonStats
 
+logger = logging.getLogger(__name__)
+
+# -- Team colors: (primary, secondary) per abbreviation --
+_TEAM_COLORS: dict[str, tuple[str, str]] = {
+    "ATL": ("#e03a3e", "#c1d32f"),
+    "BOS": ("#007a33", "#ba9653"),
+    "BKN": ("#000000", "#ffffff"),
+    "CHA": ("#1d1160", "#00788c"),
+    "CHI": ("#ce1141", "#000000"),
+    "CLE": ("#860038", "#fdbb30"),
+    "DAL": ("#00538c", "#002b5e"),
+    "DEN": ("#0e2240", "#fec524"),
+    "DET": ("#c8102e", "#1d42ba"),
+    "GSW": ("#1d428a", "#ffc72c"),
+    "HOU": ("#ce1141", "#000000"),
+    "IND": ("#002d62", "#fdbb30"),
+    "LAC": ("#c8102e", "#1d428a"),
+    "LAL": ("#552583", "#fdb927"),
+    "MEM": ("#5d76a9", "#12173f"),
+    "MIA": ("#98002e", "#f9a01b"),
+    "MIL": ("#00471b", "#eee1c6"),
+    "MIN": ("#0c2340", "#236192"),
+    "NOP": ("#0c2340", "#c8102e"),
+    "NYK": ("#006bb6", "#f58426"),
+    "OKC": ("#007ac1", "#ef6136"),
+    "ORL": ("#0077c0", "#c4ced4"),
+    "PHI": ("#006bb6", "#ed174c"),
+    "PHX": ("#1d1160", "#e56020"),
+    "POR": ("#e03a3e", "#000000"),
+    "SAC": ("#5a2d81", "#63727a"),
+    "SAS": ("#c4ced4", "#000000"),
+    "TOR": ("#ce1141", "#000000"),
+    "UTA": ("#002b5c", "#00471b"),
+    "WAS": ("#002b5c", "#e31837"),
+}
+
 # -- Design tokens --
-_BG = LinearGradient(
-    colors=["#0f1923", "#152232", "#0f1923"],
-    start_point=(0.0, 0.0),
-    end_point=(1.0, 1.0),
-)
 _CARD_BG = "#162029"
 _ROW_EVEN = "#1a2733"
 _ROW_ODD = "#162029"
@@ -35,21 +74,103 @@ _DIVIDER = "#263640"
 
 # NBA league averages for color-coding
 _LEAGUE_AVG: dict[str, float] = {
-    "ppg": 23.0, "rpg": 6.0, "apg": 4.5,
-    "fg_pct": 0.46, "fg3_pct": 0.36, "ft_pct": 0.78,
-    "ts_pct": 0.575, "usg_pct": 0.20, "net_rating": 0.0, "pie": 0.10,
+    "ppg": 23.0,
+    "rpg": 6.0,
+    "apg": 4.5,
+    "fg_pct": 0.46,
+    "fg3_pct": 0.36,
+    "ft_pct": 0.78,
+    "ts_pct": 0.575,
+    "usg_pct": 0.20,
+    "net_rating": 0.0,
+    "pie": 0.10,
 }
 
 _LABEL_TO_KEY: dict[str, str] = {
-    "PPG": "ppg", "RPG": "rpg", "APG": "apg",
-    "FG%": "fg_pct", "FG PCT": "fg_pct",
-    "3P%": "fg3_pct", "3PT%": "fg3_pct", "FT%": "ft_pct",
-    "TS%": "ts_pct", "USG%": "usg_pct",
-    "NET RTG": "net_rating", "PIE": "pie",
+    "PPG": "ppg",
+    "RPG": "rpg",
+    "APG": "apg",
+    "FG%": "fg_pct",
+    "FG PCT": "fg_pct",
+    "3P%": "fg3_pct",
+    "3PT%": "fg3_pct",
+    "FT%": "ft_pct",
+    "TS%": "ts_pct",
+    "USG%": "usg_pct",
+    "NET RTG": "net_rating",
+    "PIE": "pie",
 }
 
 _CANVAS_W = 1200
-_CANVAS_H = 675
+_HEADSHOT_SIZE = 120
+
+# -- Headshot cache --
+_headshot_cache: dict[int, str | None] = {}
+
+
+def _get_team_colors(team: str) -> tuple[str, str]:
+    """Return (primary, secondary) color for a team abbreviation."""
+    return _TEAM_COLORS.get(team, ("#0f1923", "#152232"))
+
+
+def _team_gradient(team: str) -> LinearGradient:
+    """Create a subtle dark gradient tinted with team colors."""
+    primary, secondary = _get_team_colors(team)
+    return LinearGradient(
+        colors=[_darken(primary, 0.25), "#0f1923", _darken(secondary, 0.25)],
+        start_point=(0.0, 0.0),
+        end_point=(1.0, 1.0),
+    )
+
+
+def _dual_team_gradient(team_a: str, team_b: str) -> LinearGradient:
+    """Create a gradient blending both teams' primary colors (darkened)."""
+    primary_a, _ = _get_team_colors(team_a)
+    primary_b, _ = _get_team_colors(team_b)
+    return LinearGradient(
+        colors=[_darken(primary_a, 0.3), "#0f1923", _darken(primary_b, 0.3)],
+        start_point=(0.0, 0.0),
+        end_point=(1.0, 1.0),
+    )
+
+
+def _darken(hex_color: str, factor: float) -> str:
+    """Darken a hex color by a factor (0.0 = black, 1.0 = original)."""
+    hex_color = hex_color.lstrip("#")
+    r = int(int(hex_color[0:2], 16) * factor)
+    g = int(int(hex_color[2:4], 16) * factor)
+    b = int(int(hex_color[4:6], 16) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _fetch_headshot(player_id: int) -> str | None:
+    """Download a player headshot and return the temp file path, or None on failure.
+
+    Results are cached in-memory so each player is fetched at most once.
+    """
+    if player_id in _headshot_cache:
+        return _headshot_cache[player_id]
+
+    url = f"https://cdn.nba.com/headshots/nba/latest/1040x760/{player_id}.png"
+    try:
+        resp = httpx.get(url, timeout=5.0, follow_redirects=True)
+        resp.raise_for_status()
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(resp.content)
+        _headshot_cache[player_id] = tmp.name
+        return tmp.name
+    except Exception:
+        logger.debug("Failed to fetch headshot for player_id=%d", player_id)
+        _headshot_cache[player_id] = None
+        return None
+
+
+def _headshot_image(player_id: int, size: int = _HEADSHOT_SIZE) -> Image | None:
+    """Return a PicTex Image builder for the player headshot, or None."""
+    path = _fetch_headshot(player_id)
+    if path is None:
+        return None
+    return Image(path).size(width=size, height=int(size * 760 / 1040))
 
 
 def _color_for(stat_key: str, value: float) -> str:
@@ -90,14 +211,19 @@ def _render_to_bytes(canvas: Canvas, *builders: Column | Row) -> bytes:
     return buf.read()
 
 
-def _make_canvas() -> Canvas:
-    """Create a standard LeGM canvas."""
+def _make_canvas(height: int, background: LinearGradient | None = None) -> Canvas:
+    """Create a LeGM canvas with dynamic height and optional team gradient."""
+    bg = background or LinearGradient(
+        colors=["#0f1923", "#152232", "#0f1923"],
+        start_point=(0.0, 0.0),
+        end_point=(1.0, 1.0),
+    )
     return (
         Canvas()
         .font_family("Arial")
         .color(_TEXT)
-        .background_color(_BG)
-        .size(width=_CANVAS_W, height=_CANVAS_H)
+        .background_color(bg)
+        .size(width=_CANVAS_W, height=height)
     )
 
 
@@ -146,13 +272,7 @@ def _stat_cell(
     weight: int = 400,
     align: TextAlign = TextAlign.CENTER,
 ) -> Text:
-    cell = (
-        Text(text)
-        .font_size(size)
-        .font_weight(weight)
-        .color(color)
-        .text_align(align)
-    )
+    cell = Text(text).font_size(size).font_weight(weight).color(color).text_align(align)
     if width:
         cell.size(width=width)
     else:
@@ -161,7 +281,7 @@ def _stat_cell(
 
 
 # ---------------------------------------------------------------------------
-# Comparison chart — clean table layout
+# Comparison chart — StatMuse-inspired with headshots + team gradients
 # ---------------------------------------------------------------------------
 
 
@@ -171,7 +291,7 @@ def generate_comparison_chart(
     adv_a: PlayerAdvancedStats | None = None,
     adv_b: PlayerAdvancedStats | None = None,
 ) -> bytes:
-    """Create a table-style comparison chart. Returns PNG bytes."""
+    """Create a table-style comparison chart with headshots. Returns PNG bytes."""
     rows: list[tuple[str, float, float, bool, bool]] = [
         ("PPG", stats_a.ppg, stats_b.ppg, False, True),
         ("RPG", stats_a.rpg, stats_b.rpg, False, True),
@@ -179,11 +299,13 @@ def generate_comparison_chart(
         ("FG%", stats_a.fg_pct, stats_b.fg_pct, True, True),
     ]
     if adv_a and adv_b:
-        rows.extend([
-            ("TS%", adv_a.ts_pct, adv_b.ts_pct, True, True),
-            ("USG%", adv_a.usg_pct, adv_b.usg_pct, True, True),
-            ("Net Rtg", adv_a.net_rating, adv_b.net_rating, False, True),
-        ])
+        rows.extend(
+            [
+                ("TS%", adv_a.ts_pct, adv_b.ts_pct, True, True),
+                ("USG%", adv_a.usg_pct, adv_b.usg_pct, True, True),
+                ("Net Rtg", adv_a.net_rating, adv_b.net_rating, False, True),
+            ]
+        )
 
     name_a = stats_a.player_name.split()[-1].upper()
     name_b = stats_b.player_name.split()[-1].upper()
@@ -199,10 +321,11 @@ def generate_comparison_chart(
         name_b=name_b,
         full_name_a=stats_a.player_name.split()[-1],
         full_name_b=stats_b.player_name.split()[-1],
-        rows=[
-            (label, va, vb, is_pct, hib)
-            for label, va, vb, is_pct, hib in rows
-        ],
+        rows=[(label, va, vb, is_pct, hib) for label, va, vb, is_pct, hib in rows],
+        player_id_a=stats_a.player_id,
+        player_id_b=stats_b.player_id,
+        team_a=stats_a.team,
+        team_b=stats_b.team,
     )
 
 
@@ -215,19 +338,60 @@ def _build_comparison_table(
     full_name_a: str,
     full_name_b: str,
     rows: list[tuple[str, float, float, bool, bool]],
+    player_id_a: int | None = None,
+    player_id_b: int | None = None,
+    team_a: str = "",
+    team_b: str = "",
 ) -> bytes:
-    """Build and render a comparison table."""
-    canvas = _make_canvas()
+    """Build and render a comparison table with headshots and team gradient."""
+    num_rows = len(rows)
+    canvas_h = 400 + (num_rows * 45)
 
-    # Header
-    children: list[Column | Row | Text] = [
-        _header_text(title),
-    ]
-    if subtitle:
-        children.append(_subtitle_text(subtitle))
+    bg = _dual_team_gradient(team_a, team_b) if team_a and team_b else None
+    canvas = _make_canvas(canvas_h, background=bg)
+
+    # -- Header row: [headshot_a] [title block] [headshot_b] --
+    title_block = (
+        Column(
+            _header_text(title, size=26),
+            _subtitle_text(subtitle) if subtitle else Text("").size(height=0),
+        )
+        .flex_grow(1)
+        .gap(4)
+        .align_items("center")
+        .justify_content("center")
+    )
+
+    header_children: list[Column | Row | Text | Image] = []
+
+    headshot_a = _headshot_image(player_id_a, _HEADSHOT_SIZE) if player_id_a else None
+    headshot_b = _headshot_image(player_id_b, _HEADSHOT_SIZE) if player_id_b else None
+
+    if headshot_a:
+        header_children.append(headshot_a)
+    else:
+        header_children.append(Row().size(width=_HEADSHOT_SIZE))
+
+    header_children.append(title_block)
+
+    if headshot_b:
+        header_children.append(headshot_b)
+    else:
+        header_children.append(Row().size(width=_HEADSHOT_SIZE))
+
+    header_row = (
+        Row(*header_children)
+        .size(width="100%")
+        .padding(0, 24)
+        .align_items("center")
+        .justify_content("center")
+        .gap(16)
+    )
+
+    children: list[Column | Row | Text | Image] = [header_row]
 
     # Column headers
-    header_row = (
+    col_header_row = (
         Row(
             _stat_cell("STAT", color=_TEXT_DIM, size=12, weight=700),
             _stat_cell(name_a, color=_ACCENT_A, size=13, weight=700),
@@ -235,10 +399,10 @@ def _build_comparison_table(
             _stat_cell("EDGE", color=_TEXT_DIM, size=12, weight=700, width=100),
         )
         .size(width="100%")
-        .padding(8, 24)
+        .padding(6, 24)
     )
     children.append(_divider())
-    children.append(header_row)
+    children.append(col_header_row)
     children.append(_divider())
 
     # Stat rows
@@ -277,27 +441,31 @@ def _build_comparison_table(
                 _stat_cell(edge_text, color=edge_color, size=15, width=100),
             )
             .size(width="100%")
-            .padding(10, 24)
+            .padding(8, 24)
             .background_color(row_bg)
             .border_radius(4)
         )
         children.append(stat_row)
 
-    # Bottom divider + tally
+    # Tally
     children.append(_divider())
     tally = (
         Row(
             _stat_cell(
                 f"{full_name_a} leads {wins_a}",
-                color=_ACCENT_A, size=14, weight=700,
+                color=_ACCENT_A,
+                size=14,
+                weight=700,
             ),
             _stat_cell(
                 f"{full_name_b} leads {wins_b}",
-                color=_ACCENT_B, size=14, weight=700,
+                color=_ACCENT_B,
+                size=14,
+                weight=700,
             ),
         )
         .size(width="100%")
-        .padding(8, 24)
+        .padding(6, 24)
     )
     children.append(tally)
     children.append(_watermark())
@@ -305,7 +473,7 @@ def _build_comparison_table(
     card = (
         Column(*children)
         .size(width="100%", height="100%")
-        .padding(32, 40)
+        .padding(24, 32)
         .gap(4)
         .justify_content("start")
     )
@@ -314,7 +482,7 @@ def _build_comparison_table(
 
 
 # ---------------------------------------------------------------------------
-# Stat card — single player
+# Stat card — single player, StatMuse-inspired layout
 # ---------------------------------------------------------------------------
 
 
@@ -322,10 +490,11 @@ def generate_stat_card(
     stats: PlayerSeasonStats,
     advanced: PlayerAdvancedStats | None = None,
 ) -> bytes:
-    """Create a two-column stat card with color-coded values. Returns PNG bytes."""
-    canvas = _make_canvas()
+    """Create a stat card with headshot on the left and stats on the right.
 
-    left_rows = [
+    Returns PNG bytes.
+    """
+    stat_rows: list[tuple[str, str, str]] = [
         ("PPG", f"{stats.ppg}", _color_for("ppg", stats.ppg)),
         ("RPG", f"{stats.rpg}", _color_for("rpg", stats.rpg)),
         ("APG", f"{stats.apg}", _color_for("apg", stats.apg)),
@@ -334,106 +503,126 @@ def generate_stat_card(
         ("FT%", f"{stats.ft_pct:.1%}", _color_for("ft_pct", stats.ft_pct)),
     ]
 
-    right_rows: list[tuple[str, str, str]] = []
     if advanced:
-        right_rows = [
-            ("TS%", f"{advanced.ts_pct:.1%}", _color_for("ts_pct", advanced.ts_pct)),
-            ("USG%", f"{advanced.usg_pct:.1%}", _color_for("usg_pct", advanced.usg_pct)),
-            ("Net Rtg", f"{advanced.net_rating:+.1f}", _color_for("net_rating", advanced.net_rating)),
-            ("PIE", f"{advanced.pie:.3f}", _color_for("pie", advanced.pie)),
-            ("ORtg", f"{advanced.off_rating:.1f}", _TEXT_BRIGHT),
-            ("DRtg", f"{advanced.def_rating:.1f}", _TEXT_BRIGHT),
-        ]
+        stat_rows.extend(
+            [
+                (
+                    "TS%",
+                    f"{advanced.ts_pct:.1%}",
+                    _color_for("ts_pct", advanced.ts_pct),
+                ),
+                (
+                    "USG%",
+                    f"{advanced.usg_pct:.1%}",
+                    _color_for("usg_pct", advanced.usg_pct),
+                ),
+                (
+                    "Net Rtg",
+                    f"{advanced.net_rating:+.1f}",
+                    _color_for("net_rating", advanced.net_rating),
+                ),
+                ("PIE", f"{advanced.pie:.3f}", _color_for("pie", advanced.pie)),
+                ("ORtg", f"{advanced.off_rating:.1f}", _TEXT_BRIGHT),
+                ("DRtg", f"{advanced.def_rating:.1f}", _TEXT_BRIGHT),
+            ]
+        )
+
+    num_stat_rows = len(stat_rows)
+    canvas_h = max(400, 200 + (num_stat_rows * 38))
+
+    bg = _team_gradient(stats.team)
+    canvas = _make_canvas(canvas_h, background=bg)
+
+    # -- Left column: headshot --
+    headshot = _headshot_image(stats.player_id, size=280)
+    if headshot:
+        left_col = (
+            Column(headshot)
+            .size(width="30%", height="100%")
+            .align_items("center")
+            .justify_content("end")
+        )
+    else:
+        left_col = Column().size(width="30%")
+
+    # -- Right column: name, hero stat, meta, stat rows --
+    right_children: list[Column | Row | Text | Image] = []
 
     # Player name
-    children: list[Column | Row | Text] = [
-        _header_text(stats.player_name.upper(), size=30),
-    ]
+    right_children.append(
+        Text(stats.player_name.upper())
+        .font_size(28)
+        .font_weight(700)
+        .color(_TEXT_BRIGHT)
+        .text_align(TextAlign.LEFT)
+        .size(width="100%")
+    )
 
     # Hero PPG
     hero = (
-        Column(
+        Row(
             Text(f"{stats.ppg}")
-                .font_size(56)
-                .font_weight(700)
-                .color(_GOLD)
-                .text_align(TextAlign.CENTER)
-                .size(width="100%")
-                .text_shadows(
-                    Shadow(offset=(0, 0), blur_radius=20, color="#ffb30040"),
-                ),
-            Text("PPG")
-                .font_size(13)
-                .color(_TEXT_DIM)
-                .text_align(TextAlign.CENTER)
-                .size(width="100%"),
+            .font_size(52)
+            .font_weight(700)
+            .color(_GOLD)
+            .text_shadows(
+                Shadow(offset=(0, 0), blur_radius=20, color="#ffb30040"),
+            ),
+            Text("PPG").font_size(14).color(_TEXT_DIM).font_weight(700),
         )
+        .gap(8)
+        .align_items("end")
         .size(width="100%")
-        .gap(0)
-        .align_items("center")
     )
-    children.append(hero)
+    right_children.append(hero)
 
     # Meta line
-    meta = f"{stats.team}  |  {stats.season}  |  {stats.games_played} GP  |  {stats.mpg} MPG"
-    children.append(_subtitle_text(meta))
-
-    # Stat columns
-    def _stat_column(
-        header: str, header_color: str, rows: list[tuple[str, str, str]]
-    ) -> Column:
-        col_children: list[Row | Text] = [
-            Text(header)
-                .font_size(12)
-                .font_weight(700)
-                .color(header_color)
-                .text_align(TextAlign.CENTER)
-                .size(width="100%"),
-        ]
-        for i, (label, value, color) in enumerate(rows):
-            row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
-            row = (
-                Row(
-                    Text(label)
-                        .font_size(13)
-                        .font_weight(700)
-                        .color(_TEXT_DIM)
-                        .flex_grow(1),
-                    Text(value)
-                        .font_size(16)
-                        .font_weight(700)
-                        .color(color),
-                )
-                .size(width="100%")
-                .padding(6, 16)
-                .background_color(row_bg)
-                .border_radius(4)
-            )
-            col_children.append(row)
-        return Column(*col_children).flex_grow(1).gap(3)
-
-    columns_row_children = [
-        _stat_column("OFFENSE", _ACCENT_A, left_rows),
-    ]
-    if right_rows:
-        columns_row_children.append(
-            _stat_column("IMPACT", _ACCENT_B, right_rows),
-        )
-
-    columns_row = Row(*columns_row_children).size(width="100%").gap(24)
-    children.append(_divider())
-    children.append(columns_row)
-    children.append(_watermark())
-
-    card = (
-        Column(*children)
-        .size(width="100%", height="100%")
-        .padding(28, 40)
-        .gap(6)
-        .justify_content("start")
+    meta = (
+        f"{stats.team}  |  {stats.season}  |  "
+        f"{stats.games_played} GP  |  {stats.mpg} MPG"
+    )
+    right_children.append(
+        Text(meta)
+        .font_size(13)
+        .color(_TEXT_DIM)
+        .text_align(TextAlign.LEFT)
+        .size(width="100%")
     )
 
-    return _render_to_bytes(canvas, card)
+    right_children.append(_divider())
+
+    # Stat rows
+    for i, (label, value, color) in enumerate(stat_rows):
+        row_bg = _ROW_EVEN if i % 2 == 0 else _ROW_ODD
+        row = (
+            Row(
+                Text(label)
+                .font_size(13)
+                .font_weight(700)
+                .color(_TEXT_DIM)
+                .flex_grow(1),
+                Text(value).font_size(16).font_weight(700).color(color),
+            )
+            .size(width="100%")
+            .padding(5, 12)
+            .background_color(row_bg)
+            .border_radius(4)
+        )
+        right_children.append(row)
+
+    right_children.append(_watermark())
+
+    right_col = Column(*right_children).flex_grow(1).gap(3).justify_content("start")
+
+    # -- Main layout: left + right --
+    main_row = (
+        Row(left_col, right_col)
+        .size(width="100%", height="100%")
+        .gap(24)
+        .padding(24, 32)
+    )
+
+    return _render_to_bytes(canvas, main_row)
 
 
 # ---------------------------------------------------------------------------
@@ -483,10 +672,13 @@ def generate_flexible_chart(chart_data: ChartData) -> bytes:
 
 
 def _render_single_chart(chart_data: ChartData) -> bytes:
-    """Render single-entity chart — one value column, color-coded."""
-    canvas = _make_canvas()
+    """Render single-entity chart with dynamic height and tighter spacing."""
+    num_rows = len(chart_data.rows)
+    canvas_h = 200 + (num_rows * 45)
 
-    children: list[Column | Row | Text] = [
+    canvas = _make_canvas(canvas_h)
+
+    children: list[Column | Row | Text | Image] = [
         _header_text(chart_data.title),
     ]
     if chart_data.subtitle:
@@ -495,11 +687,11 @@ def _render_single_chart(chart_data: ChartData) -> bytes:
     # Entity label
     children.append(
         Text(chart_data.label_a.upper())
-            .font_size(16)
-            .font_weight(700)
-            .color(_ACCENT_A)
-            .text_align(TextAlign.CENTER)
-            .size(width="100%")
+        .font_size(16)
+        .font_weight(700)
+        .color(_ACCENT_A)
+        .text_align(TextAlign.CENTER)
+        .size(width="100%")
     )
     children.append(_divider())
 
@@ -512,17 +704,17 @@ def _render_single_chart(chart_data: ChartData) -> bytes:
         stat_row = (
             Row(
                 Text(row.label)
-                    .font_size(14)
-                    .font_weight(700)
-                    .color(_TEXT_DIM)
-                    .flex_grow(1),
+                .font_size(14)
+                .font_weight(700)
+                .color(_TEXT_DIM)
+                .flex_grow(1),
                 Text(_fmt_from_hint(row.value_a, row.fmt))
-                    .font_size(17)
-                    .font_weight(700)
-                    .color(color),
+                .font_size(17)
+                .font_weight(700)
+                .color(color),
             )
             .size(width="100%")
-            .padding(10, 40)
+            .padding(8, 40)
             .background_color(row_bg)
             .border_radius(4)
         )
@@ -533,8 +725,8 @@ def _render_single_chart(chart_data: ChartData) -> bytes:
     card = (
         Column(*children)
         .size(width="100%", height="100%")
-        .padding(32, 40)
-        .gap(6)
+        .padding(24, 32)
+        .gap(4)
         .justify_content("start")
     )
 
