@@ -149,6 +149,18 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
+        # Only reply when explicitly @mentioned in the tweet text
+        bot_handle = self._settings.twitter_bot_username
+        if bot_handle:
+            text_lower = mention.get("text", "").lower()
+            if f"@{bot_handle.lower()}" not in text_lower:
+                logger.debug(
+                    "Skipping indirect mention %s (no explicit @%s)",
+                    mention["id"],
+                    bot_handle,
+                )
+                return
+
         if self._filter.should_skip(mention, is_mention=True):
             return
 

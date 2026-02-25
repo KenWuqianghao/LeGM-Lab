@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     twitter_access_token: str = ""
     twitter_access_token_secret: str = ""
     twitter_bot_user_id: str = ""
+    twitter_bot_username: str = ""
 
     # Bot
     bot_mention_poll_interval: int = Field(
