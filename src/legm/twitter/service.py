@@ -282,7 +282,13 @@ class TwitterService:
         """
         kwargs: dict[str, Any] = {
             "id": user_id,
-            "tweet_fields": ["author_id", "created_at", "in_reply_to_user_id"],
+            "tweet_fields": [
+                "author_id",
+                "created_at",
+                "in_reply_to_user_id",
+                "entities",
+                "referenced_tweets",
+            ],
             "max_results": 100,
         }
         if since_id is not None:
@@ -297,19 +303,41 @@ class TwitterService:
             logger.debug("No new mentions since %s", since_id)
             return []
 
-        mentions = [
-            {
-                "id": str(tweet.id),
-                "text": tweet.text,
-                "author_id": str(tweet.author_id),
-                "in_reply_to_user_id": str(tweet.in_reply_to_user_id)
-                if tweet.in_reply_to_user_id
-                else None,
-                "created_at": tweet.created_at.isoformat()
-                if tweet.created_at
-                else None,
-            }
-            for tweet in response.data
-        ]
+        mentions = []
+        for tweet in response.data:
+            # Extract entities.mentions for position analysis
+            entities_mentions: list[dict[str, Any]] = []
+            if hasattr(tweet, "entities") and tweet.entities:
+                for m in tweet.entities.get("mentions", []):
+                    entities_mentions.append(
+                        {
+                            "start": m["start"],
+                            "end": m["end"],
+                            "username": m["username"],
+                        }
+                    )
+
+            # Check if this tweet is a reply
+            is_reply = False
+            if hasattr(tweet, "referenced_tweets") and tweet.referenced_tweets:
+                is_reply = any(
+                    ref.type == "replied_to" for ref in tweet.referenced_tweets
+                )
+
+            mentions.append(
+                {
+                    "id": str(tweet.id),
+                    "text": tweet.text,
+                    "author_id": str(tweet.author_id),
+                    "in_reply_to_user_id": str(tweet.in_reply_to_user_id)
+                    if tweet.in_reply_to_user_id
+                    else None,
+                    "created_at": tweet.created_at.isoformat()
+                    if tweet.created_at
+                    else None,
+                    "is_reply": is_reply,
+                    "entities_mentions": entities_mentions,
+                }
+            )
         logger.info("Found %d new mentions", len(mentions))
         return mentions
