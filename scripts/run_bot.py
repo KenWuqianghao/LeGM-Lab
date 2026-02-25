@@ -22,6 +22,7 @@ from legm.twitter.service import TwitterService
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    stream=sys.stdout,
 )
 logger = logging.getLogger("legm.bot")
 
@@ -29,6 +30,7 @@ logger = logging.getLogger("legm.bot")
 async def main() -> None:
     """Initialize services and run the bot."""
     logger.info("Starting LeGM Bot (dry_run=%s)", settings.bot_dry_run)
+    logger.info("Database URL: %s", settings.database_url)
 
     # Database
     engine = create_async_engine_from_url(settings.database_url)
