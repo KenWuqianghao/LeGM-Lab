@@ -236,7 +236,7 @@ class LeGMBot:
             await asyncio.sleep(self._settings.bot_search_poll_interval)
 
     async def _search_and_engage(self) -> None:
-        """Run one search cycle: find tweets, pick the best, quote-tweet."""
+        """Run one search cycle: find tweets, pick the spiciest, post a quote tweet."""
         if self._daily_proactive_count >= self._settings.bot_max_daily_proactive:
             logger.debug(
                 "Daily proactive limit reached (%d/%d)",
@@ -287,7 +287,7 @@ class LeGMBot:
 
         if self._settings.bot_dry_run:
             logger.info(
-                "[DRY RUN] Would post about %s: %s",
+                "[DRY RUN] Would quote-tweet %s: %s",
                 best["id"],
                 analysis.roast,
             )
@@ -297,9 +297,13 @@ class LeGMBot:
             tweet_id = await self._twitter.post_tweet_with_media(
                 text=analysis.roast,
                 image_bytes=analysis.chart_png,
+                quote_tweet_id=best["id"],
             )
         else:
-            tweet_id = await self._twitter.post_tweet(text=analysis.roast)
+            tweet_id = await self._twitter.quote_tweet(
+                text=analysis.roast,
+                quoted_tweet_url=f"https://x.com/i/status/{best['id']}",
+            )
 
         self._rate_limiter.record_post()
         self._daily_proactive_count += 1
@@ -307,14 +311,14 @@ class LeGMBot:
         await self._repository.record_tweet(
             take_id=take.id,
             tweet_id=tweet_id,
-            tweet_type="standalone",
+            tweet_type="quote",
             content=analysis.roast,
         )
 
         logger.info(
-            "Posted tweet %s inspired by %s (daily: %d/%d)",
-            tweet_id,
+            "Quote-tweeted %s with tweet %s (daily: %d/%d)",
             best["id"],
+            tweet_id,
             self._daily_proactive_count,
             self._settings.bot_max_daily_proactive,
         )
