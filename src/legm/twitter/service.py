@@ -282,7 +282,7 @@ class TwitterService:
         """
         kwargs: dict[str, Any] = {
             "id": user_id,
-            "tweet_fields": ["author_id", "created_at"],
+            "tweet_fields": ["author_id", "created_at", "in_reply_to_user_id"],
             "max_results": 100,
         }
         if since_id is not None:
@@ -302,6 +302,9 @@ class TwitterService:
                 "id": str(tweet.id),
                 "text": tweet.text,
                 "author_id": str(tweet.author_id),
+                "in_reply_to_user_id": str(tweet.in_reply_to_user_id)
+                if tweet.in_reply_to_user_id
+                else None,
                 "created_at": tweet.created_at.isoformat()
                 if tweet.created_at
                 else None,

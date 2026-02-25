@@ -130,13 +130,9 @@ class LeGMBot:
             (m["id"] for m in mentions if m.get("id")),
             default=None,
         )
-        if max_id and (
-            self._since_id is None or int(max_id) > int(self._since_id)
-        ):
+        if max_id and (self._since_id is None or int(max_id) > int(self._since_id)):
             self._since_id = max_id
-            await self._repository.set_config(
-                "mentions_since_id", self._since_id
-            )
+            await self._repository.set_config("mentions_since_id", self._since_id)
 
         for mention in mentions:
             try:
@@ -149,17 +145,17 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
-        # Only reply when explicitly @mentioned in the tweet text
-        bot_handle = self._settings.twitter_bot_username
-        if bot_handle:
-            text_lower = mention.get("text", "").lower()
-            if f"@{bot_handle.lower()}" not in text_lower:
-                logger.debug(
-                    "Skipping indirect mention %s (no explicit @%s)",
-                    mention["id"],
-                    bot_handle,
-                )
-                return
+        # Only reply to direct mentions, not replies in a thread.
+        # If the tweet is a reply and it's NOT replying to the bot, skip it.
+        reply_to = mention.get("in_reply_to_user_id")
+        bot_user_id = self._settings.twitter_bot_user_id
+        if reply_to and reply_to != bot_user_id:
+            logger.debug(
+                "Skipping thread reply %s (replying to %s, not bot)",
+                mention["id"],
+                reply_to,
+            )
+            return
 
         if self._filter.should_skip(mention, is_mention=True):
             return
@@ -212,23 +208,30 @@ class LeGMBot:
             source_tweet_id=mention["id"],
         )
 
+        # Build reply: verdict header + roast + reasoning
+        verdict = analysis.verdict.upper()
+        confidence = round(analysis.confidence * 100)
+        reply_text = (
+            f"{verdict} ({confidence}%)\n\n{analysis.roast}\n\n{analysis.reasoning}"
+        )
+
         if self._settings.bot_dry_run:
             logger.info(
                 "[DRY RUN] Would reply to %s: %s",
                 mention["id"],
-                analysis.roast,
+                reply_text,
             )
             return
 
         if analysis.chart_png:
             tweet_id = await self._twitter.post_tweet_with_media(
-                text=analysis.roast,
+                text=reply_text,
                 image_bytes=analysis.chart_png,
                 in_reply_to_tweet_id=mention["id"],
             )
         else:
             tweet_id = await self._twitter.reply_to_tweet(
-                text=analysis.roast,
+                text=reply_text,
                 in_reply_to_tweet_id=mention["id"],
             )
 
@@ -238,7 +241,7 @@ class LeGMBot:
             take_id=take.id,
             tweet_id=tweet_id,
             tweet_type="reply",
-            content=analysis.roast,
+            content=reply_text,
         )
 
         logger.info("Replied to mention %s with tweet %s", mention["id"], tweet_id)
