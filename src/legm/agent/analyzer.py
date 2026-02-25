@@ -170,7 +170,7 @@ def _parse_analysis(content: str) -> TakeAnalysis:
         return TakeAnalysis(
             verdict="mid",
             confidence=0.5,
-            roast=content[:280] if content else "Couldn't process this take dawg",
+            roast=content[:200] if content else "Couldn't process this take dawg",
             reasoning="Failed to parse structured response from LLM",
             stats_used=[],
         )
