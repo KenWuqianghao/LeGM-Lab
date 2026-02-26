@@ -145,11 +145,15 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
-        # Only process tweets where the user explicitly typed @BotHandle.
-        # Skip inherited mentions (thread replies where @handle auto-carries).
-        if not self._is_explicit_mention(mention):
+        # Skip thread noise: replies to the bot's own tweets where the @handle
+        # is just inherited from the conversation.  Everything else (direct
+        # mentions, replies to other users' tweets where they tag the bot) is
+        # intentional and should be processed.
+        reply_to = mention.get("in_reply_to_user_id")
+        bot_user_id = self._settings.twitter_bot_user_id
+        if reply_to and reply_to == bot_user_id:
             logger.debug(
-                "Skipping inherited mention %s (bot handle not explicitly typed)",
+                "Skipping thread reply to bot's own tweet %s",
                 mention["id"],
             )
             return
@@ -252,52 +256,6 @@ class LeGMBot:
         )
 
         logger.info("Replied to mention %s with tweet %s", mention["id"], tweet_id)
-
-    # ------------------------------------------------------------------
-    # Mention classification
-    # ------------------------------------------------------------------
-
-    def _is_explicit_mention(self, mention: dict[str, Any]) -> bool:
-        """Return True if the user explicitly typed @BotHandle.
-
-        Twitter auto-prepends inherited @handles as a contiguous block at the
-        start of the tweet text.  If @BotHandle only appears inside that
-        leading prefix, the mention is inherited (not explicit).
-        """
-        # Not a reply → every mention is explicit
-        if not mention.get("is_reply"):
-            return True
-
-        bot_username = self._settings.twitter_bot_username.lower().lstrip("@")
-        if not bot_username:
-            # No username configured — can't filter, treat as explicit
-            return True
-
-        entities_mentions: list[dict[str, Any]] = mention.get("entities_mentions", [])
-        if not entities_mentions:
-            # No entity data — fall back to treating as explicit
-            return True
-
-        text = mention.get("text", "")
-
-        # Find the end of the leading @-mention prefix block.
-        # Inherited handles form a contiguous sequence of @handles separated
-        # only by whitespace at the very start of the tweet text.
-        sorted_mentions = sorted(entities_mentions, key=lambda m: m["start"])
-        prefix_end = 0
-        for m in sorted_mentions:
-            gap = text[prefix_end : m["start"]]
-            if gap.strip() == "":
-                prefix_end = m["end"]
-            else:
-                break
-
-        # Check if @BotHandle appears after the prefix block
-        for m in sorted_mentions:
-            if m["username"].lower() == bot_username and m["start"] >= prefix_end:
-                return True
-
-        return False
 
     # ------------------------------------------------------------------
     # Proactive loop — search and quote-tweet NBA takes
