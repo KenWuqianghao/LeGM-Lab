@@ -14,19 +14,22 @@ from nba_api.stats.endpoints import (
 
 logger = logging.getLogger(__name__)
 
-# stats.nba.com requires browser-like headers or it will timeout/block
+# stats.nba.com requires browser-like headers or it will timeout/block.
+# These must match nba_api's defaults closely to avoid server-side throttling.
 _HEADERS = {
     "Host": "stats.nba.com",
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/140.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nba.com/",
-    "Origin": "https://www.nba.com",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://stats.nba.com/",
     "Connection": "keep-alive",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
 }
 
 _MAX_RETRIES = 2
@@ -127,8 +130,7 @@ class NBAClient:
             label=f"PlayerEstimatedMetrics({season})",
         )
         return [
-            dict(r)
-            for r in metrics.get_normalized_dict()["PlayerEstimatedMetrics"]
+            dict(r) for r in metrics.get_normalized_dict()["PlayerEstimatedMetrics"]
         ]
 
     async def get_team_standings(self) -> list[dict]:
