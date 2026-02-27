@@ -86,6 +86,9 @@ All config is via environment variables (or `.env` file):
 | `ANTHROPIC_API_KEY` | Claude API key |
 | `LLM_PROVIDER` | `claude`, `openai`, or `openai_compat` |
 | `LLM_MODEL` | Model name (default: `claude-sonnet-4-6`) |
+| `OPENAI_COMPAT_BASE_URL` | Base URL for OpenAI-compatible endpoint |
+| `OPENAI_COMPAT_API_KEY` | API key for OpenAI-compatible endpoint |
+| `OPENAI_COMPAT_MODEL` | Model name for OpenAI-compatible endpoint |
 | `DATABASE_URL` | SQLAlchemy URL (default: SQLite) |
 | `TWITTER_API_KEY` | X API key |
 | `TWITTER_API_SECRET` | X API secret |
@@ -100,6 +103,8 @@ All config is via environment variables (or `.env` file):
 
 ## Deployment
 
+### Bot (Railway)
+
 The bot runs on [Railway](https://railway.app) as a background worker. A `Dockerfile` and `railway.toml` are included.
 
 ```bash
@@ -113,6 +118,29 @@ docker compose up --build
 # 4. Deploy
 ```
 
+### LeLM Inference (Modal)
+
+The custom [LeLM](https://github.com/KenWuqianghao/LeLM) model (Qwen3-8B fine-tuned on NBA takes) is served via [Modal](https://modal.com) on a T4 GPU with scale-to-zero. It exposes an OpenAI-compatible `/v1/chat/completions` endpoint that the bot connects to via the `openai_compat` provider.
+
+```bash
+# Deploy
+modal deploy deploy/modal_lelm.py
+
+# Test
+curl -X POST https://<modal-url>/v1/chat/completions \
+  -H "Authorization: Bearer <AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"lelm","messages":[{"role":"user","content":"Is LeBron washed?"}]}'
+```
+
+Bot env vars to connect:
+```
+LLM_PROVIDER=openai_compat
+OPENAI_COMPAT_BASE_URL=https://<modal-url>/v1
+OPENAI_COMPAT_API_KEY=<AUTH_TOKEN>
+OPENAI_COMPAT_MODEL=lelm
+```
+
 ## Project Structure
 
 ```
@@ -120,11 +148,13 @@ src/legm/
   agent/        # LLM agent loop, system prompt, tool definitions
   api/          # FastAPI routes (takes, bot control, health)
   db/           # SQLAlchemy models, migrations, repository
-  llm/          # Multi-provider LLM abstraction (Claude, OpenAI)
+  llm/          # Multi-provider LLM abstraction (Claude, OpenAI, LeLM)
   stats/        # NBA API client, caching, chart generation
   twitter/      # X bot, tweet service, rate limiter, filters
   config.py     # Pydantic settings
   main.py       # FastAPI app
+deploy/
+  modal_lelm.py       # Modal deployment for LeLM inference
 scripts/
   run_bot.py          # Bot CLI entrypoint
   run_single_take.py  # Analyze one take from CLI
@@ -142,10 +172,10 @@ uv run python -m mypy .                    # type check
 ## Tech Stack
 
 - **Backend**: Python 3.12 / FastAPI / SQLAlchemy / Pydantic v2
-- **AI**: Claude (Anthropic) or OpenAI with tool-use agent loop
+- **AI**: Claude (Anthropic) / OpenAI / [LeLM](https://huggingface.co/KenWu/LeLM-GGUF) with tool-use agent loop
 - **Data**: NBA API (nba_api) / Matplotlib for chart rendering
 - **Bot**: Tweepy (X API v2) / asyncio event loops
-- **Infra**: Docker / Railway / SQLite (dev) / PostgreSQL (prod)
+- **Infra**: Docker / Railway / Modal (GPU inference) / SQLite (dev) / PostgreSQL (prod)
 
 ## License
 

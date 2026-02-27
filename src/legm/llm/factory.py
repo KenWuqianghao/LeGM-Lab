@@ -33,7 +33,7 @@ def create_llm_provider(settings: Settings) -> LLMProvider:
         case LLMProviderEnum.OPENAI_COMPAT:
             return OpenAICompatProvider(
                 api_key=settings.openai_compat_api_key,
-                model=settings.llm_model,
+                model=settings.openai_compat_model or settings.llm_model,
                 base_url=settings.openai_compat_base_url or None,
             )
         case _:

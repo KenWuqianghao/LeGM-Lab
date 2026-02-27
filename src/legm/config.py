@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_compat_base_url: str = ""
     openai_compat_api_key: str = ""
+    openai_compat_model: str = ""
 
     # Database
     database_url: str = _DEFAULT_DB_URL
@@ -54,6 +55,10 @@ class Settings(BaseSettings):
     )
     bot_monthly_budget: int = Field(default=450, description="Monthly tweet budget")
     bot_dry_run: bool = Field(default=False, description="Log actions without posting")
+    bot_simple_analysis: bool = Field(
+        default=False,
+        description="Skip tool-use loop, use raw LLM output as roast (for LeLM)",
+    )
     bot_proactive_enabled: bool = Field(
         default=False, description="Enable proactive tweet searching"
     )

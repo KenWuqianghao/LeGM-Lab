@@ -209,15 +209,18 @@ class LeGMBot:
             source_tweet_id=mention["id"],
         )
 
-        # Build reply: verdict header + roast, truncated to 280 chars for Twitter
-        verdict = analysis.verdict.upper()
-        confidence = round(analysis.confidence * 100)
-        header = f"{verdict} ({confidence}%)\n\n"
-        max_roast_len = 280 - len(header)
-        roast = analysis.roast
-        if len(roast) > max_roast_len:
-            roast = roast[: max_roast_len - 1] + "\u2026"
-        reply_text = header + roast
+        # Build reply, truncated to 280 chars for Twitter
+        if self._settings.bot_simple_analysis:
+            reply_text = analysis.roast[:280]
+        else:
+            verdict = analysis.verdict.upper()
+            confidence = round(analysis.confidence * 100)
+            header = f"{verdict} ({confidence}%)\n\n"
+            max_roast_len = 280 - len(header)
+            roast = analysis.roast
+            if len(roast) > max_roast_len:
+                roast = roast[: max_roast_len - 1] + "\u2026"
+            reply_text = header + roast
 
         if self._settings.bot_dry_run:
             logger.info(

@@ -5,11 +5,14 @@ chat-completions interface (DeepSeek, Together, Groq, local vLLM, etc.).
 """
 
 import json
+import re
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
 from legm.llm.types import LLMResponse, Message, ToolCall, ToolDefinition
+
+_THINK_RE = re.compile(r"<think>[\s\S]*?</think>\s*")
 
 
 class OpenAICompatProvider:
@@ -73,7 +76,7 @@ def _parse_response(response: ChatCompletion) -> LLMResponse:
     choice = response.choices[0]
     message = choice.message
 
-    content = message.content or ""
+    content = _THINK_RE.sub("", message.content or "").strip()
     tool_calls: list[ToolCall] = []
 
     if message.tool_calls:
