@@ -43,7 +43,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Wire up app state
     app.state.take_repository = TakeRepository(session_factory)
     app.state.take_analyzer = TakeAnalyzer(
-        llm, stats_service, simple_mode=app_settings.bot_simple_analysis
+        llm,
+        stats_service,
+        simple_mode=app_settings.bot_simple_analysis,
+        exa_api_key=app_settings.exa_api_key,
     )
 
     logger.info("LeGM Lab started (provider=%s)", app_settings.llm_provider)

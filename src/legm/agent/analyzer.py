@@ -14,7 +14,7 @@ from legm.stats.service import NBAStatsService
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ROUNDS = 2
+MAX_TOOL_ROUNDS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,10 +50,12 @@ class TakeAnalyzer:
         llm: LLMProvider,
         stats_service: NBAStatsService,
         simple_mode: bool = False,
+        exa_api_key: str = "",
     ) -> None:
         self._llm = llm
         self._stats = stats_service
         self._simple_mode = simple_mode
+        self._exa_api_key = exa_api_key
 
     async def analyze(self, take_text: str) -> TakeAnalysis:
         if self._simple_mode:
@@ -113,7 +115,9 @@ class TakeAnalyzer:
                     tool_call.name,
                     tool_call.arguments,
                 )
-                result = await execute_tool(tool_call, self._stats)
+                result = await execute_tool(
+                    tool_call, self._stats, exa_api_key=self._exa_api_key
+                )
                 tool_results.append(
                     {
                         "type": "tool_result",

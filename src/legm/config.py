@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     openai_compat_api_key: str = ""
     openai_compat_model: str = ""
 
+    # Exa web search
+    exa_api_key: str = ""
+
     # Database
     database_url: str = _DEFAULT_DB_URL
 

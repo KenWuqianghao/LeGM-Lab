@@ -1,9 +1,14 @@
 """Tool definitions and executor dispatch for the LeGM agent."""
 
+from __future__ import annotations
+
 import json
+import logging
 
 from legm.llm.types import ToolCall, ToolDefinition
 from legm.stats.service import NBAStatsService
+
+logger = logging.getLogger(__name__)
 
 TOOL_DEFINITIONS: list[ToolDefinition] = [
     ToolDefinition(
@@ -126,12 +131,52 @@ TOOL_DEFINITIONS: list[ToolDefinition] = [
             "required": ["team_name"],
         },
     ),
+    ToolDefinition(
+        name="web_search",
+        description=(
+            "Search the web for NBA information. Use this FIRST when you "
+            "encounter unknown player acronyms/nicknames (e.g. 'DFS', 'PG13', "
+            "'The Brow'), recent trades/signings, or anything the stats tools "
+            "can't answer. Returns text snippets from top results."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Search query. Be specific, e.g. "
+                        "'DFS NBA player full name' or "
+                        "'NBA trade deadline 2025 results'"
+                    ),
+                },
+            },
+            "required": ["query"],
+        },
+    ),
 ]
+
+
+async def _exa_search(query: str, api_key: str) -> str:
+    """Run an Exa web search and return condensed text snippets."""
+    from exa_py import AsyncExa
+
+    exa = AsyncExa(api_key=api_key)
+    results = await exa.search(
+        query,
+        num_results=3,
+        contents={"text": {"max_characters": 500}},
+    )
+    snippets = []
+    for r in results.results:
+        snippets.append(f"[{r.title}] {r.text}")
+    return "\n---\n".join(snippets) if snippets else "No results found."
 
 
 async def execute_tool(
     tool_call: ToolCall,
     stats_service: NBAStatsService,
+    exa_api_key: str = "",
 ) -> str:
     """Execute a tool call and return the JSON-serialized result."""
     name = tool_call.name
@@ -166,12 +211,17 @@ async def execute_tool(
             result = await stats_service.get_team_record(
                 team_name=args["team_name"],
             )
+        elif name == "web_search":
+            if not exa_api_key:
+                return json.dumps({"error": "EXA_API_KEY not configured"})
+            return await _exa_search(args["query"], exa_api_key)
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
     except Exception as exc:
-        return json.dumps({"error": f"Stats API error: {exc}"})
+        logger.exception("Tool %s failed", name)
+        return json.dumps({"error": f"Tool error: {exc}"})
 
     if isinstance(result, list):
         return json.dumps(

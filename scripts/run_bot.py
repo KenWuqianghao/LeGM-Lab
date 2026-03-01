@@ -43,7 +43,10 @@ async def main() -> None:
     llm = create_llm_provider(settings)
     stats_service = NBAStatsService(NBAClient(), TTLCache())
     analyzer = TakeAnalyzer(
-        llm, stats_service, simple_mode=settings.bot_simple_analysis
+        llm,
+        stats_service,
+        simple_mode=settings.bot_simple_analysis,
+        exa_api_key=settings.exa_api_key,
     )
 
     twitter_service = TwitterService(

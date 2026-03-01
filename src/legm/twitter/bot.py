@@ -125,15 +125,6 @@ class LeGMBot:
 
         logger.info("Processing %d mentions", len(mentions))
 
-        # Advance since_id BEFORE processing so restarts don't re-fetch
-        max_id = max(
-            (m["id"] for m in mentions if m.get("id")),
-            default=None,
-        )
-        if max_id and (self._since_id is None or int(max_id) > int(self._since_id)):
-            self._since_id = max_id
-            await self._repository.set_config("mentions_since_id", self._since_id)
-
         for mention in mentions:
             try:
                 await self._handle_mention(mention)
@@ -142,22 +133,18 @@ class LeGMBot:
                     "Failed to handle mention %s",
                     mention.get("id"),
                 )
+            finally:
+                # Advance since_id per-mention so only successfully-seen
+                # mentions are skipped on restart.
+                mid = mention.get("id")
+                if mid and (self._since_id is None or int(mid) > int(self._since_id)):
+                    self._since_id = mid
+                    await self._repository.set_config(
+                        "mentions_since_id", self._since_id
+                    )
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
-        # Skip thread noise: replies to the bot's own tweets where the @handle
-        # is just inherited from the conversation.  Everything else (direct
-        # mentions, replies to other users' tweets where they tag the bot) is
-        # intentional and should be processed.
-        reply_to = mention.get("in_reply_to_user_id")
-        bot_user_id = self._settings.twitter_bot_user_id
-        if reply_to and reply_to == bot_user_id:
-            logger.debug(
-                "Skipping thread reply to bot's own tweet %s",
-                mention["id"],
-            )
-            return
-
         if self._filter.should_skip(mention, is_mention=True):
             return
 
