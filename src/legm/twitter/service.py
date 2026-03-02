@@ -403,7 +403,7 @@ class TwitterService:
                             added,
                         )
             except Exception:
-                logger.debug("Search fallback failed", exc_info=True)
+                logger.warning("Search fallback failed", exc_info=True)
 
         logger.info("Found %d new mentions", len(mentions))
         return mentions

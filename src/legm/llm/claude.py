@@ -1,12 +1,15 @@
 """Anthropic Claude provider implementation."""
 
 import json
+import logging
 
 from anthropic import AsyncAnthropic
 from anthropic.types import Message as AnthropicMessage
 from anthropic.types import ToolUseBlock
 
 from legm.llm.types import LLMResponse, Message, ToolCall, ToolDefinition
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeProvider:
@@ -25,7 +28,7 @@ class ClaudeProvider:
         """Send messages to Claude and return a unified response."""
         kwargs: dict = {
             "model": self._model,
-            "max_tokens": 1024,
+            "max_tokens": 4096,
             "messages": [_format_message(m) for m in messages],
         }
         if system is not None:
@@ -35,7 +38,14 @@ class ClaudeProvider:
 
         response: AnthropicMessage = await self._client.messages.create(**kwargs)
 
-        return _parse_response(response)
+        parsed = _parse_response(response)
+        if not parsed.content and not parsed.tool_calls:
+            logger.warning(
+                "Claude returned empty response (stop_reason=%s, blocks=%d)",
+                response.stop_reason,
+                len(response.content),
+            )
+        return parsed
 
 
 def _format_message(message: Message) -> dict:

@@ -168,11 +168,13 @@ class LeGMBot:
 
     async def _sweep_unreplied(self) -> None:
         """Fetch recent mentions without since_id and process unreplied ones."""
+        logger.info("Sweep: checking for unreplied mentions")
         mentions = await self._twitter.get_mentions(
             user_id=self._settings.twitter_bot_user_id,
             username=self._settings.twitter_bot_username,
         )
         if not mentions:
+            logger.info("Sweep: no recent mentions found")
             return
 
         unreplied = []
