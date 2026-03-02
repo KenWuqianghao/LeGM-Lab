@@ -159,21 +159,34 @@ class LeGMBot:
 
         take_text = mention["text"]
 
-        # Fetch conversation thread for richer context
+        # Fetch conversation thread + quoted tweet for richer context
         context_text = take_text
         try:
+            context_parts: list[str] = []
+
+            # Fetch quoted tweet if the mention itself is a quote tweet
+            quoted_id = mention.get("quoted_tweet_id")
+            if quoted_id:
+                qt_text = await self._twitter.get_tweet_text(quoted_id)
+                if qt_text:
+                    context_parts.append(f"[Quoted tweet] {qt_text}")
+
+            # Walk up the reply chain
             thread_texts = await self._twitter.get_conversation_thread(
                 mention["id"],
                 max_parents=5,
             )
             if thread_texts:
-                thread_block = "\n".join(thread_texts)
+                context_parts.extend(thread_texts)
+
+            if context_parts:
+                thread_block = "\n".join(context_parts)
                 context_text = (
                     f"Thread context:\n{thread_block}\n\nMention: {take_text}"
                 )
                 logger.info(
-                    "Built thread context with %d parent tweets for mention %s",
-                    len(thread_texts),
+                    "Built context with %d items for mention %s",
+                    len(context_parts),
                     mention["id"],
                 )
         except Exception:

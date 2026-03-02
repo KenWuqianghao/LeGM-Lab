@@ -190,6 +190,17 @@ class TwitterService:
         logger.info("Found %d tweets for query: %s", len(tweets), query)
         return tweets
 
+    async def get_tweet_text(self, tweet_id: str) -> str | None:
+        """Fetch a single tweet's text by ID."""
+        response = await asyncio.to_thread(
+            self._client.get_tweet,
+            tweet_id,
+            tweet_fields=["text"],
+        )
+        if response.data:
+            return response.data.text
+        return None
+
     async def get_conversation_thread(
         self,
         tweet_id: str,
@@ -231,13 +242,25 @@ class TwitterService:
 
             tweet = response.data
 
-            # Find the "replied_to" reference
+            # Find reply and quote references
             parent_id: str | None = None
+            quoted_id: str | None = None
             if tweet.referenced_tweets:
                 for ref in tweet.referenced_tweets:
                     if ref.type == "replied_to":
                         parent_id = str(ref.id)
-                        break
+                    elif ref.type == "quoted":
+                        quoted_id = str(ref.id)
+
+            # Fetch quoted tweet text if present
+            if quoted_id:
+                qt_response = await asyncio.to_thread(
+                    self._client.get_tweet,
+                    quoted_id,
+                    tweet_fields=tweet_fields,
+                )
+                if qt_response.data:
+                    thread_texts.append(f"[Quoted tweet] {qt_response.data.text}")
 
             if parent_id is None:
                 # Reached root of the conversation (or an original tweet)
@@ -317,12 +340,15 @@ class TwitterService:
                         }
                     )
 
-            # Check if this tweet is a reply
+            # Check if this tweet is a reply or quote
             is_reply = False
+            quoted_tweet_id: str | None = None
             if hasattr(tweet, "referenced_tweets") and tweet.referenced_tweets:
-                is_reply = any(
-                    ref.type == "replied_to" for ref in tweet.referenced_tweets
-                )
+                for ref in tweet.referenced_tweets:
+                    if ref.type == "replied_to":
+                        is_reply = True
+                    elif ref.type == "quoted":
+                        quoted_tweet_id = str(ref.id)
 
             mentions.append(
                 {
@@ -336,6 +362,7 @@ class TwitterService:
                     if tweet.created_at
                     else None,
                     "is_reply": is_reply,
+                    "quoted_tweet_id": quoted_tweet_id,
                     "entities_mentions": entities_mentions,
                 }
             )
