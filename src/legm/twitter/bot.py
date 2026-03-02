@@ -43,6 +43,7 @@ class LeGMBot:
 
         self._reactive_task: asyncio.Task[None] | None = None
         self._proactive_task: asyncio.Task[None] | None = None
+        self._sweep_task: asyncio.Task[None] | None = None
         self._running = False
         self._since_id: str | None = None
         self._daily_proactive_count = 0
@@ -67,6 +68,10 @@ class LeGMBot:
             self._reactive_loop(),
             name="legm-reactive",
         )
+        self._sweep_task = asyncio.create_task(
+            self._sweep_loop(),
+            name="legm-sweep",
+        )
         if self._settings.bot_proactive_enabled:
             self._proactive_task = asyncio.create_task(
                 self._proactive_loop(),
@@ -80,7 +85,7 @@ class LeGMBot:
         """Cancel running tasks and shut down the bot."""
         self._running = False
 
-        for task in (self._reactive_task, self._proactive_task):
+        for task in (self._reactive_task, self._proactive_task, self._sweep_task):
             if task is not None and not task.done():
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -88,6 +93,7 @@ class LeGMBot:
 
         self._reactive_task = None
         self._proactive_task = None
+        self._sweep_task = None
         logger.info("LeGMBot stopped")
 
     # ------------------------------------------------------------------
@@ -143,6 +149,59 @@ class LeGMBot:
                     await self._repository.set_config(
                         "mentions_since_id", self._since_id
                     )
+
+    # ------------------------------------------------------------------
+    # Sweep loop — retry unreplied mentions
+    # ------------------------------------------------------------------
+
+    async def _sweep_loop(self) -> None:
+        """Periodically fetch recent mentions and reply to any we missed."""
+        sweep_interval = self._settings.bot_mention_poll_interval * 5
+        while self._running:
+            await asyncio.sleep(sweep_interval)
+            try:
+                await self._sweep_unreplied()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Error in sweep loop iteration")
+
+    async def _sweep_unreplied(self) -> None:
+        """Fetch recent mentions without since_id and process unreplied ones."""
+        mentions = await self._twitter.get_mentions(
+            user_id=self._settings.twitter_bot_user_id,
+            username=self._settings.twitter_bot_username,
+        )
+        if not mentions:
+            return
+
+        unreplied = []
+        for mention in mentions:
+            if await self._repository.has_replied_to(mention["id"]):
+                continue
+            if self._filter.should_skip(mention, is_mention=True):
+                continue
+            unreplied.append(mention)
+
+        if not unreplied:
+            return
+
+        logger.info("Sweep found %d unreplied mentions", len(unreplied))
+        for mention in unreplied:
+            if not self._rate_limiter.can_post():
+                logger.warning("Rate limit reached during sweep, stopping")
+                break
+            try:
+                await self._handle_mention(mention)
+            except Exception:
+                logger.exception(
+                    "Sweep: failed to handle mention %s",
+                    mention.get("id"),
+                )
+
+    # ------------------------------------------------------------------
+    # Mention handler
+    # ------------------------------------------------------------------
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
