@@ -196,6 +196,10 @@ def _parse_chart_data(raw: dict | None) -> ChartData | None:
 
 def _parse_analysis(content: str) -> TakeAnalysis:
     """Parse the LLM's JSON response into a TakeAnalysis."""
+    if not content or not content.strip():
+        msg = "LLM returned empty response"
+        raise RuntimeError(msg)
+
     json_str = _extract_json(content)
 
     try:
@@ -204,13 +208,8 @@ def _parse_analysis(content: str) -> TakeAnalysis:
         data = json.loads(json_str)
     except json.JSONDecodeError:
         logger.error("Failed to parse LLM response as JSON: %s", content[:200])
-        return TakeAnalysis(
-            verdict="mid",
-            confidence=0.5,
-            roast=content[:200] if content else "Couldn't process this take dawg",
-            reasoning="Failed to parse structured response from LLM",
-            stats_used=[],
-        )
+        msg = f"LLM returned non-JSON response: {content[:200]}"
+        raise RuntimeError(msg) from None
 
     chart_data = _parse_chart_data(data.get("chart_data"))
 
@@ -226,6 +225,7 @@ def _parse_analysis(content: str) -> TakeAnalysis:
 
 def _build_result(content: str) -> TakeAnalysis:
     """Parse LLM output and render chart if chart_data is present."""
+    logger.info("Raw LLM response (%d chars): %s", len(content), content[:300])
     analysis = _parse_analysis(content)
     chart_png: bytes | None = None
 
