@@ -47,6 +47,7 @@ class LeGMBot:
         self._running = False
         self._since_id: str | None = None
         self._daily_proactive_count = 0
+        self._processing: set[str] = set()  # mention IDs currently being handled
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -207,6 +208,21 @@ class LeGMBot:
 
     async def _handle_mention(self, mention: dict[str, Any]) -> None:
         """Analyze a single mention and reply, including conversation context."""
+        mention_id = mention["id"]
+
+        # In-memory guard: prevent poll + sweep from processing the same mention
+        if mention_id in self._processing:
+            logger.info("Mention %s already being processed, skipping", mention_id)
+            return
+        self._processing.add(mention_id)
+
+        try:
+            await self._handle_mention_inner(mention)
+        finally:
+            self._processing.discard(mention_id)
+
+    async def _handle_mention_inner(self, mention: dict[str, Any]) -> None:
+        """Core mention handling logic."""
         if self._filter.should_skip(mention, is_mention=True):
             return
 
