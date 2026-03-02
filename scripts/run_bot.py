@@ -1,9 +1,12 @@
-"""CLI entrypoint for the LeGM bot."""
+"""CLI entrypoint for the LeGM bot + API server."""
 
 import asyncio
 import logging
+import os
 import signal
 import sys
+
+import uvicorn
 
 from legm.agent.analyzer import TakeAnalyzer
 from legm.config import settings
@@ -28,7 +31,7 @@ logger = logging.getLogger("legm.bot")
 
 
 async def main() -> None:
-    """Initialize services and run the bot."""
+    """Initialize services, start the bot and the API server."""
     logger.info("Starting LeGM Bot (dry_run=%s)", settings.bot_dry_run)
     logger.info("Database URL: %s", settings.database_url)
 
@@ -87,10 +90,24 @@ async def main() -> None:
     bot.start()
     logger.info("Bot is running. Press Ctrl+C to stop.")
 
+    # Start the FastAPI server alongside the bot
+    port = int(os.environ.get("PORT", "8000"))
+    config = uvicorn.Config(
+        "legm.main:app",
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+    server_task = asyncio.create_task(server.serve(), name="legm-api")
+    logger.info("API server starting on port %d", port)
+
     await stop_event.wait()
+    server.should_exit = True
+    await server_task
     await bot.stop()
     await engine.dispose()
-    logger.info("Bot stopped cleanly.")
+    logger.info("Bot and API server stopped cleanly.")
 
 
 if __name__ == "__main__":

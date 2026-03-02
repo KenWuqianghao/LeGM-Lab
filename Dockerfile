@@ -31,6 +31,6 @@ RUN uv run python -c "from legm.stats.html_renderer import generate_flexible_cha
 RUN mkdir -p /data
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD pgrep -f "run_bot" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/health')" || exit 1
 
 CMD ["uv", "run", "python", "scripts/run_bot.py"]
