@@ -117,6 +117,7 @@ class LeGMBot:
         mentions = await self._twitter.get_mentions(
             user_id=self._settings.twitter_bot_user_id,
             since_id=self._since_id,
+            username=self._settings.twitter_bot_username,
         )
 
         if not mentions:

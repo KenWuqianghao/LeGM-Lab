@@ -289,29 +289,73 @@ class TwitterService:
         )
         return thread_texts
 
+    def _parse_tweet(self, tweet: Any) -> dict[str, Any]:
+        """Convert a tweepy Tweet object into a standardized mention dict."""
+        entities_mentions: list[dict[str, Any]] = []
+        if hasattr(tweet, "entities") and tweet.entities:
+            for m in tweet.entities.get("mentions", []):
+                entities_mentions.append(
+                    {
+                        "start": m["start"],
+                        "end": m["end"],
+                        "username": m["username"],
+                    }
+                )
+
+        is_reply = False
+        quoted_tweet_id: str | None = None
+        if hasattr(tweet, "referenced_tweets") and tweet.referenced_tweets:
+            for ref in tweet.referenced_tweets:
+                if ref.type == "replied_to":
+                    is_reply = True
+                elif ref.type == "quoted":
+                    quoted_tweet_id = str(ref.id)
+
+        return {
+            "id": str(tweet.id),
+            "text": tweet.text,
+            "author_id": str(tweet.author_id),
+            "in_reply_to_user_id": str(tweet.in_reply_to_user_id)
+            if tweet.in_reply_to_user_id
+            else None,
+            "created_at": tweet.created_at.isoformat() if tweet.created_at else None,
+            "is_reply": is_reply,
+            "quoted_tweet_id": quoted_tweet_id,
+            "entities_mentions": entities_mentions,
+        }
+
     async def get_mentions(
         self,
         user_id: str,
         since_id: str | None = None,
+        username: str = "",
     ) -> list[dict[str, Any]]:
         """Get mentions of the bot user.
+
+        Uses the mentions timeline as the primary source, then supplements
+        with the search endpoint to catch mentions the timeline misses.
 
         Args:
             user_id: The bot's Twitter user ID.
             since_id: Only return mentions newer than this tweet ID.
+            username: Bot's @username (without @). If provided, also
+                searches for ``@username`` to catch missed mentions.
 
         Returns:
             List of dicts with keys: id, text, author_id, created_at.
         """
+        tweet_fields = [
+            "author_id",
+            "created_at",
+            "in_reply_to_user_id",
+            "entities",
+            "referenced_tweets",
+        ]
+
+        # --- Source 1: mentions timeline ---
         kwargs: dict[str, Any] = {
             "id": user_id,
-            "tweet_fields": [
-                "author_id",
-                "created_at",
-                "in_reply_to_user_id",
-                "entities",
-                "referenced_tweets",
-            ],
+            "tweet_fields": tweet_fields,
             "max_results": 100,
         }
         if since_id is not None:
@@ -322,49 +366,44 @@ class TwitterService:
             **kwargs,
         )
 
-        if not response.data:
-            logger.debug("No new mentions since %s", since_id)
-            return []
+        seen_ids: set[str] = set()
+        mentions: list[dict[str, Any]] = []
+        if response.data:
+            for tweet in response.data:
+                m = self._parse_tweet(tweet)
+                seen_ids.add(m["id"])
+                mentions.append(m)
 
-        mentions = []
-        for tweet in response.data:
-            # Extract entities.mentions for position analysis
-            entities_mentions: list[dict[str, Any]] = []
-            if hasattr(tweet, "entities") and tweet.entities:
-                for m in tweet.entities.get("mentions", []):
-                    entities_mentions.append(
-                        {
-                            "start": m["start"],
-                            "end": m["end"],
-                            "username": m["username"],
-                        }
-                    )
-
-            # Check if this tweet is a reply or quote
-            is_reply = False
-            quoted_tweet_id: str | None = None
-            if hasattr(tweet, "referenced_tweets") and tweet.referenced_tweets:
-                for ref in tweet.referenced_tweets:
-                    if ref.type == "replied_to":
-                        is_reply = True
-                    elif ref.type == "quoted":
-                        quoted_tweet_id = str(ref.id)
-
-            mentions.append(
-                {
-                    "id": str(tweet.id),
-                    "text": tweet.text,
-                    "author_id": str(tweet.author_id),
-                    "in_reply_to_user_id": str(tweet.in_reply_to_user_id)
-                    if tweet.in_reply_to_user_id
-                    else None,
-                    "created_at": tweet.created_at.isoformat()
-                    if tweet.created_at
-                    else None,
-                    "is_reply": is_reply,
-                    "quoted_tweet_id": quoted_tweet_id,
-                    "entities_mentions": entities_mentions,
+        # --- Source 2: search fallback ---
+        if username:
+            try:
+                search_kwargs: dict[str, Any] = {
+                    "query": f"@{username} -from:{username}",
+                    "tweet_fields": tweet_fields,
+                    "max_results": 20,
                 }
-            )
+                if since_id is not None:
+                    search_kwargs["since_id"] = since_id
+
+                search_resp = await asyncio.to_thread(
+                    self._client.search_recent_tweets,
+                    **search_kwargs,
+                )
+                if search_resp.data:
+                    added = 0
+                    for tweet in search_resp.data:
+                        m = self._parse_tweet(tweet)
+                        if m["id"] not in seen_ids:
+                            seen_ids.add(m["id"])
+                            mentions.append(m)
+                            added += 1
+                    if added:
+                        logger.info(
+                            "Search found %d extra mentions missed by timeline",
+                            added,
+                        )
+            except Exception:
+                logger.debug("Search fallback failed", exc_info=True)
+
         logger.info("Found %d new mentions", len(mentions))
         return mentions
