@@ -1,11 +1,18 @@
 # ruff: noqa: E501, B008
-"""Modal deployment for LeLM — OpenAI-compatible inference endpoint.
+"""DEPRECATED — use the Modal deployment in the LeLM repo instead.
 
-Serves the LeLM GGUF model via llama-cpp-python with an OpenAI-compatible
-chat completions API. The bot connects using the existing openai_compat
-LLM provider — no code changes needed, just set env vars.
+This file duplicates the inference stack already deployed as the Modal app
+``lelm`` (endpoint: https://kenwuqianghao--lelm-lelm-chat.modal.run).
+Deploy and manage LeLM inference from the LeLM project; LeGM-Lab only needs
+the env vars below to connect via ``openai_compat``.
 
-Deploy:
+Historical note: deploying this script creates a *second* Modal app named
+``lelm-inference``. Do not deploy unless you intentionally want a duplicate.
+
+Deploy (LeLM repo — preferred):
+    modal deploy <path-to-lelm-modal-script>
+
+Deploy (this duplicate — avoid):
     modal deploy deploy/modal_lelm.py
 
 Test:

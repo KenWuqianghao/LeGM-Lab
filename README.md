@@ -120,26 +120,20 @@ docker compose up --build
 
 ### LeLM Inference (Modal)
 
-The custom [LeLM](https://github.com/KenWuqianghao/LeLM) model (Qwen3-8B fine-tuned on NBA takes) is served via [Modal](https://modal.com) on a T4 GPU with scale-to-zero. It exposes an OpenAI-compatible `/v1/chat/completions` endpoint that the bot connects to via the `openai_compat` provider.
+The custom [LeLM](https://github.com/KenWuqianghao/LeLM) model is served via [Modal](https://modal.com) on a T4 GPU with scale-to-zero. **Deploy and manage inference from the LeLM repo** — LeGM-Lab connects as a client via the `openai_compat` provider.
 
-```bash
-# Deploy
-modal deploy deploy/modal_lelm.py
-
-# Test
-curl -X POST https://<modal-url>/v1/chat/completions \
-  -H "Authorization: Bearer <AUTH_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"lelm","messages":[{"role":"user","content":"Is LeBron washed?"}]}'
-```
+Existing deployment: `https://kenwuqianghao--lelm-lelm-chat.modal.run`
 
 Bot env vars to connect:
 ```
 LLM_PROVIDER=openai_compat
-OPENAI_COMPAT_BASE_URL=https://<modal-url>/v1
+OPENAI_COMPAT_BASE_URL=https://kenwuqianghao--lelm-lelm-chat.modal.run/v1
 OPENAI_COMPAT_API_KEY=<AUTH_TOKEN>
 OPENAI_COMPAT_MODEL=lelm
+BOT_SIMPLE_ANALYSIS=true
 ```
+
+`deploy/modal_lelm.py` in this repo is deprecated — it creates a duplicate Modal app (`lelm-inference`). Use the LeLM project's Modal script instead.
 
 ## Project Structure
 

@@ -23,13 +23,15 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     # LLM
-    llm_provider: LLMProvider = LLMProvider.CLAUDE
-    llm_model: str = "claude-sonnet-4-6"
+    llm_provider: LLMProvider = LLMProvider.OPENAI_COMPAT
+    llm_model: str = "lelm"
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    openai_compat_base_url: str = ""
+    openai_compat_base_url: str = (
+        "https://kenwuqianghao--lelm-lelm-chat.modal.run/v1"
+    )
     openai_compat_api_key: str = ""
-    openai_compat_model: str = ""
+    openai_compat_model: str = "lelm"
 
     # Exa web search
     exa_api_key: str = ""
@@ -59,7 +61,7 @@ class Settings(BaseSettings):
     bot_monthly_budget: int = Field(default=450, description="Monthly tweet budget")
     bot_dry_run: bool = Field(default=False, description="Log actions without posting")
     bot_simple_analysis: bool = Field(
-        default=False,
+        default=True,
         description="Skip tool-use loop, use raw LLM output as roast (for LeLM)",
     )
     bot_proactive_enabled: bool = Field(
