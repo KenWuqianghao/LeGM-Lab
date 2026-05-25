@@ -8,6 +8,7 @@ from legm.config import LLMProvider as LLMProviderEnum
 from legm.config import Settings
 from legm.llm.claude import ClaudeProvider
 from legm.llm.factory import create_llm_provider
+from legm.llm.lelm_modal import LeLMModalProvider
 from legm.llm.openai_compat import OpenAICompatProvider
 
 
@@ -46,6 +47,21 @@ class TestCreateLLMProvider:
         )
         provider = create_llm_provider(test_settings)
         assert isinstance(provider, OpenAICompatProvider)
+
+    def test_openai_compat_uses_lelm_modal_for_modal_host(
+        self, test_settings: Settings
+    ) -> None:
+        """Factory routes the LeLM Modal host to the root-endpoint provider."""
+        test_settings = test_settings.model_copy(
+            update={
+                "llm_provider": LLMProviderEnum.OPENAI_COMPAT,
+                "openai_compat_base_url": (
+                    "https://kenwuqianghao--lelm-lelm-chat.modal.run/v1"
+                ),
+            }
+        )
+        provider = create_llm_provider(test_settings)
+        assert isinstance(provider, LeLMModalProvider)
 
     def test_unknown_provider_raises(self, test_settings: Settings) -> None:
         """Factory raises ValueError for an unrecognised provider string."""

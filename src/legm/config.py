@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     openai_compat_base_url: str = (
-        "https://kenwuqianghao--lelm-lelm-chat.modal.run/v1"
+        "https://kenwuqianghao--lelm-lelm-chat.modal.run"
     )
     openai_compat_api_key: str = ""
     openai_compat_model: str = "lelm"

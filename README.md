@@ -127,8 +127,8 @@ Existing deployment: `https://kenwuqianghao--lelm-lelm-chat.modal.run`
 Bot env vars to connect:
 ```
 LLM_PROVIDER=openai_compat
-OPENAI_COMPAT_BASE_URL=https://kenwuqianghao--lelm-lelm-chat.modal.run/v1
-OPENAI_COMPAT_API_KEY=<AUTH_TOKEN>
+OPENAI_COMPAT_BASE_URL=https://kenwuqianghao--lelm-lelm-chat.modal.run
+OPENAI_COMPAT_API_KEY=
 OPENAI_COMPAT_MODEL=lelm
 BOT_SIMPLE_ANALYSIS=true
 ```
