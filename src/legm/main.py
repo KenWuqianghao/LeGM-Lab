@@ -76,6 +76,8 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
             "http://127.0.0.1:3000",
             "https://legm-lab.vercel.app",
         ],
+        # Preview deployments and team aliases on Vercel
+        allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
         allow_methods=["*"],
         allow_headers=["*"],
     )

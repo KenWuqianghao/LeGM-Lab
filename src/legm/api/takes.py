@@ -1,6 +1,7 @@
 """Take analysis API endpoints."""
 
 import hashlib
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from legm.dependencies import TakeAnalyzerDep, TakeRepositoryDep
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/takes", tags=["takes"])
 
@@ -77,7 +80,14 @@ async def analyze_take(
     request: Request,
 ) -> AnalyzeTakeResponse:
     """Analyze a take and persist the result."""
-    analysis = await analyzer.analyze(body.take)
+    try:
+        analysis = await analyzer.analyze(body.take)
+    except Exception as exc:
+        logger.exception("Take analysis failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Analysis unavailable: {exc}",
+        ) from exc
 
     take = await repo.create(
         take_text=body.take,
